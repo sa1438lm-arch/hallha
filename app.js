@@ -257,14 +257,16 @@ function renderHost() {
     `;
   } else if (s.state === 'question_active') {
     const q = s.question || {};
+    const qText = q.text || 'السؤال قيد التحميل... يرجى الانتظار';
+    const qCat = q.category || '🕌';
     content = `
       <div class="question-header">
         <div>السؤال ${q.index || (s.currentQuestion + 1)} من ٥</div>
         <div class="timer" id="timer">٢٠</div>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
-      <div class="category">${q.category || ''}</div>
-      <div class="question-text">${q.text || 'جاري تحميل السؤال...'}</div>
+      <div class="category">${qCat}</div>
+      <div class="question-text">${qText}</div>
       <div class="teams-list">
         ${s.teams.map(t => `
           <div class="team-item">

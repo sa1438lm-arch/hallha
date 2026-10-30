@@ -129,7 +129,7 @@ function getPublicSession(session, forTeam = false) {
       total: QUESTIONS.length,
       category: q.category,
       text: q.text,
-      options: forTeam ? q.options : null,
+      options: forTeam ? q.options : [],
       timeLimit: 20
     };
   }
