@@ -256,12 +256,15 @@ function renderHost() {
       <button class="btn btn-gold" style="width:100%; margin-top:16px;" ${s.teamCount < 2 ? 'disabled' : ''} onclick="startChallenge()">ابدئي التحدي</button>
     `;
   } else if (s.state === 'question_active') {
+    const q = s.question || {};
     content = `
       <div class="question-header">
-        <div>السؤال ${s.currentQuestion + 1} من ٥</div>
+        <div>السؤال ${q.index || (s.currentQuestion + 1)} من ٥</div>
         <div class="timer" id="timer">٢٠</div>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+      <div class="category">${q.category || ''}</div>
+      <div class="question-text">${q.text || 'جاري تحميل السؤال...'}</div>
       <div class="teams-list">
         ${s.teams.map(t => `
           <div class="team-item">
@@ -406,6 +409,7 @@ function selectOption(el, index) {
 
 function startTimer(startTime) {
   clearInterval(timerInterval);
+  if (!startTime) startTime = Date.now();
   const update = () => {
     const elapsed = Date.now() - startTime;
     const remaining = Math.max(0, 20 - Math.floor(elapsed / 1000));

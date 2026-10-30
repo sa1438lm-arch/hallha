@@ -121,17 +121,17 @@ function getPublicSession(session, forTeam = false) {
       answered: session.answers.has(t.id)
     }))
   };
-  if (session.state === 'question_active' && forTeam) {
+  base.questionStartTime = session.questionStartTime;
+  if (session.state === 'question_active') {
     const q = QUESTIONS[session.currentQuestion];
     base.question = {
       index: session.currentQuestion + 1,
       total: QUESTIONS.length,
       category: q.category,
       text: q.text,
-      options: q.options,
+      options: forTeam ? q.options : null,
       timeLimit: 20
     };
-    base.questionStartTime = session.questionStartTime;
   }
   if (session.state === 'question_reveal' || session.state === 'leaderboard' || session.state === 'finished') {
     const q = QUESTIONS[session.currentQuestion];
