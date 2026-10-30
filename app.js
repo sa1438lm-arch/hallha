@@ -11,6 +11,8 @@ let winnerSoundPlayed = false;
 let timerInterval = null;
 let currentView = 'home';
 let maxGroups = 5;
+let pendingTeamJoin = false;
+let showJoinedSuccess = false;
 
 const SUGGESTED_NAMES = ['المتألقات', 'العبقريات', 'المبدعات', 'الذكيات', 'المتميزات'];
 
@@ -31,12 +33,19 @@ function send(msg) {
 }
 
 function handleMessage(msg) {
-  if (msg.type === 'error') { showError(msg.message); return; }
+  if (msg.type === 'error') {
+    pendingTeamJoin = false;
+    showError(msg.message);
+    return;
+  }
   if (msg.type === 'joined') {
     role = msg.role;
     if (msg.role === 'team') {
       teamId = msg.teamId;
       reconnectToken = msg.reconnectToken || reconnectToken;
+      showJoinedSuccess = pendingTeamJoin;
+      pendingTeamJoin = false;
+      currentView = 'team';
       localStorage.setItem('teamReconnect', JSON.stringify({
         sessionId: msg.session?.id,
         teamId,
@@ -235,6 +244,7 @@ function checkCode() {
 function joinTeam() {
   const name = document.getElementById('team-name').value.trim();
   if (!name) return showError('يرجى إدخال اسم المجموعة');
+  pendingTeamJoin = true;
   connectWS();
   setTimeout(() => send({ type: 'join_as_team', code: window._pendingCode, name }), 200);
 }
@@ -367,9 +377,12 @@ function goNext() { send({ type: 'next_question' }); }
 function renderTeam() {
   if (!currentSession) return;
   const s = currentSession;
+  const joinedNow = showJoinedSuccess;
+  showJoinedSuccess = false;
   let content = '';
   if (s.state === 'waiting') {
     content = `
+      ${joinedNow ? '<div id="join-success" class="join-success">✓ تم الانضمام إلى التحدي بنجاح</div>' : ''}
       <h2 style="text-align:center;">في انتظار بدء التحدي</h2>
       <div class="lobby-code" style="font-size:48px;">${s.code}</div>
       <div class="teams-list">
@@ -410,6 +423,9 @@ function renderTeam() {
     if (s.state === 'finished') createConfetti();
   }
   app.innerHTML = `<div class="screen"><div class="screen-inner">${content}</div></div>`;
+  if (joinedNow) {
+    setTimeout(() => document.getElementById('join-success')?.remove(), 3500);
+  }
 }
 
 function selectOption(el, index) {
