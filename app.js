@@ -267,7 +267,10 @@ function renderHost() {
       <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
       <div class="category">${qCat}</div>
       <div class="question-text">${qText}</div>
-      <div class="teams-list">
+      <div class="options">
+        ${(q.options || []).map(opt => `<div class="option">${opt}</div>`).join('')}
+      </div>
+      <div class="teams-list" style="margin-top:24px;">
         ${s.teams.map(t => `
           <div class="team-item">
             <span class="symbol">${t.symbol}</span>
