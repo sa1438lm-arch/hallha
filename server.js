@@ -118,7 +118,8 @@ function getPublicSession(session, forTeam = false) {
       totalTime: t.totalTime,
       correctCount: t.correctCount,
       connected: session.teamSockets.has(t.id),
-      answered: session.answers.has(t.id)
+      answered: session.answers.has(t.id),
+      selectedOption: session.answers.has(t.id) ? session.answers.get(t.id).option : null
     }))
   };
   base.questionStartTime = session.questionStartTime;

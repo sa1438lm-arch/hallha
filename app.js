@@ -284,7 +284,7 @@ function renderHost() {
           <div class="team-item">
             <span class="symbol">${t.symbol}</span>
             <span>${t.name}</span>
-            <span>${t.answered ? '✓ أجابت' : 'بانتظار الإجابة'}</span>
+            <span>${t.answered ? '✓ ' + ((s.question && s.question.options && t.selectedOption != null) ? s.question.options[t.selectedOption] : 'أجابت') : 'بانتظار الإجابة'}</span>
           </div>
         `).join('')}
       </div>
@@ -376,15 +376,15 @@ function renderTeam() {
         ${s.teams.map(t => `<div class="team-item ${t.id === teamId ? 'connected' : ''}"><span class="symbol">${t.symbol}</span><span>${t.name}</span>${t.id === teamId ? '<span>✓ أنتِ</span>' : ''}</div>`).join('')}
       </div>
     `;
-  } else if (s.state === 'question_active' && s.question) {
-    const q = s.question;
+  } else if (s.state === 'question_active') {
+    const q = s.question || {};
     content = `
-      <div class="question-header"><div>السؤال ${q.index} من ${q.total}</div><div class="timer" id="timer">٢٠</div></div>
+      <div class="question-header"><div>السؤال ${q.index || (s.currentQuestion+1)} من ٥</div><div class="timer" id="timer">٢٠</div></div>
       <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
-      <div class="category">${q.category}</div>
-      <div class="question-text">${q.text}</div>
+      <div class="category">${q.category || ''}</div>
+      <div class="question-text">${q.text || 'جاري تحميل السؤال...'}</div>
       <div class="options" id="options">
-        ${q.options.map((opt, i) => `<div class="option" data-index="${i}" onclick="selectOption(this, ${i})">${opt}</div>`).join('')}
+        ${(q.options || []).map((opt, i) => `<div class="option" data-index="${i}" onclick="selectOption(this, ${i})">${opt}</div>`).join('')}
       </div>
       <div id="answer-status" style="text-align:center; margin-top:16px; font-weight:700; color:#4C3A78;"></div>
     `;
