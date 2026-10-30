@@ -708,3 +708,131 @@ label {
   0%, 60%, 100% { opacity: .28; transform: translateY(0); }
   30% { opacity: 1; transform: translateY(-5px); }
 }
+
+/* ===== Professional final ranking reveal ===== */
+.final-reveal-shell {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 24px 12px;
+}
+.final-reveal-kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: #F4C542;
+  color: #1A1530;
+  font-weight: 900;
+  margin-bottom: 12px;
+}
+.final-reveal-shell h2 {
+  font-size: clamp(32px, 5vw, 54px);
+  color: #1A1530;
+  margin-bottom: 8px;
+}
+.final-reveal-subtitle {
+  color: #6B6580;
+  font-size: clamp(16px, 2vw, 21px);
+  margin-bottom: 28px;
+}
+.reveal-stage {
+  width: min(100%, 720px);
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reveal-rank-card {
+  width: min(100%, 620px);
+  border: 2px solid #EDE9FE;
+  border-radius: 28px;
+  padding: 34px 26px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8F7FC 100%);
+  box-shadow: 0 24px 70px rgba(26, 21, 48, .14);
+  animation: revealCardIn .62s cubic-bezier(.2,.8,.2,1) both;
+}
+.reveal-rank-card.winner-reveal {
+  border-color: #F4C542;
+  background: linear-gradient(180deg, #FFFDF4 0%, #FFF7D6 100%);
+  box-shadow: 0 30px 85px rgba(244,197,66,.32);
+}
+.reveal-medal {
+  font-size: clamp(58px, 8vw, 88px);
+  line-height: 1;
+  margin-bottom: 10px;
+  animation: medalPop .8s cubic-bezier(.2,.9,.2,1) both;
+}
+.reveal-rank-label {
+  color: #6C5CE7;
+  font-weight: 900;
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+.reveal-team-symbol {
+  font-size: 34px;
+  margin-bottom: 8px;
+}
+.reveal-team-name {
+  font-size: clamp(30px, 5vw, 48px);
+  font-weight: 900;
+  color: #1A1530;
+  line-height: 1.3;
+}
+.reveal-team-score {
+  margin-top: 10px;
+  font-size: 24px;
+  font-weight: 800;
+  color: #4C3A78;
+}
+.reveal-next-line,
+.reveal-winner-line {
+  margin-top: 20px;
+  font-size: 17px;
+  color: #6B6580;
+}
+.reveal-winner-line {
+  color: #9A6D00;
+  font-weight: 900;
+  font-size: 20px;
+}
+.reveal-progress {
+  width: min(100%, 620px);
+  height: 8px;
+  margin-top: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #EEEAFB;
+}
+.reveal-progress > div {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6C5CE7, #F4C542);
+  transition: width .12s linear;
+}
+.final-announcement-wait {
+  min-height: 65vh;
+  justify-content: center;
+}
+
+@keyframes revealCardIn {
+  from { opacity: 0; transform: translateY(28px) scale(.95); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes medalPop {
+  0% { transform: scale(.4) rotate(-8deg); opacity: 0; }
+  70% { transform: scale(1.12) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+@media (max-width: 768px) {
+  .final-reveal-shell { min-height: 62vh; padding: 12px 0; }
+  .reveal-stage { min-height: 320px; }
+  .reveal-rank-card { padding: 28px 18px; border-radius: 22px; }
+  .reveal-team-score { font-size: 21px; }
+}

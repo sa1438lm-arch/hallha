@@ -21,6 +21,8 @@ const heartbeatInterval = setInterval(() => {
 wss.on('close', () => clearInterval(heartbeatInterval));
 
 const PORT = process.env.PORT || 3000;
+const QUESTION_DURATION_MS = 20000;
+const FINAL_REVEAL_DURATION_MS = 9000;
 
 // In-memory store
 const sessions = new Map(); // sessionId -> session
@@ -144,44 +146,58 @@ function getPublicSession(session, forTeam = false) {
       category: q.category,
       text: q.text,
       options: q.options,
-      timeLimit: 20
+      timeLimit: QUESTION_DURATION_MS / 1000
     };
   }
   // كشف الحل خاص بشاشة المعلم فقط ولا يُرسل للطالبات.
-  if (!forTeam && (session.state === 'question_reveal' || session.state === 'leaderboard' || session.state === 'finished')) {
+  if (!forTeam && (session.state === 'question_reveal' || session.state === 'leaderboard')) {
     const q = QUESTIONS[session.currentQuestion];
-    base.reveal = {
-      category: q.category,
-      text: q.text,
-      options: q.options,
-      correct: q.correct,
-      solution: q.solution,
-      answers: Array.from(session.answers.entries()).map(([teamId, a]) => {
-        const team = session.teams.find(t => t.id === teamId);
-        return {
-          teamId,
-          name: team?.name,
-          symbol: team?.symbol,
-          option: a.option,
-          correct: a.correct,
-          score: a.score,
-          time: a.time
-        };
-      })
-    };
+    if (q) {
+      base.reveal = {
+        category: q.category,
+        text: q.text,
+        options: q.options,
+        correct: q.correct,
+        solution: q.solution,
+        answers: Array.from(session.answers.entries()).map(([teamId, a]) => {
+          const team = session.teams.find(t => t.id === teamId);
+          return {
+            teamId,
+            name: team?.name,
+            symbol: team?.symbol,
+            option: a.option,
+            correct: a.correct,
+            score: a.score,
+            time: a.time
+          };
+        })
+      };
+    }
   }
 
-  if (session.state === 'finished') {
+  if (session.state === 'final_reveal' || session.state === 'finished') {
     const sorted = [...session.teams].sort((a, b) => b.score - a.score || a.totalTime - b.totalTime);
     const winner = sorted[0] || null;
     const totalCorrect = session.teams.reduce((sum, t) => sum + (t.correctCount || 0), 0);
     const totalPossible = session.teams.length * QUESTIONS.length;
-    base.finalSummary = {
-      winner: winner ? { id: winner.id, name: winner.name, symbol: winner.symbol, score: winner.score } : null,
-      totalCorrect,
-      totalPossible,
-      accuracy: totalPossible ? Math.round((totalCorrect / totalPossible) * 100) : 0
-    };
+    // أثناء التشويق لا نكشف الفائز أو الترتيب لشاشات الطالبات قبل نهاية العرض.
+    if (!(forTeam && session.state === 'final_reveal')) {
+      base.finalSummary = {
+        winner: winner ? { id: winner.id, name: winner.name, symbol: winner.symbol, score: winner.score } : null,
+        ...(forTeam ? {} : {
+          ranking: sorted.map((t, index) => ({
+            rank: index + 1, id: t.id, name: t.name, symbol: t.symbol, score: t.score, totalTime: t.totalTime
+          }))
+        }),
+        totalCorrect,
+        totalPossible,
+        accuracy: totalPossible ? Math.round((totalCorrect / totalPossible) * 100) : 0
+      };
+    }
+    if (session.state === 'final_reveal') {
+      base.finalRevealStartTime = session.finalRevealStartTime || Date.now();
+      base.finalRevealDuration = FINAL_REVEAL_DURATION_MS;
+    }
   }
   return base;
 }
@@ -219,31 +235,46 @@ function closeQuestion(session) {
   // Calculate scores for unanswered (0)
   for (const team of session.teams) {
     if (!session.answers.has(team.id)) {
-      session.answers.set(team.id, { option: null, time: 20000, score: 0, correct: false });
+      session.answers.set(team.id, { option: null, time: QUESTION_DURATION_MS, score: 0, correct: false });
     }
   }
   broadcast(session, { type: 'state', session: getPublicSession(session) });
 }
 
+function finishSession(session) {
+  if (!session || session.state === 'finished') return;
+  session.state = 'finished';
+  session.finishedAt = Date.now();
+  session.questionStartTime = null;
+  broadcast(session, { type: 'state', session: getPublicSession(session) });
+}
+
+function startFinalReveal(session) {
+  if (!session || session.state === 'final_reveal' || session.state === 'finished') return;
+  session.state = 'final_reveal';
+  session.finalRevealStartTime = Date.now();
+  session.questionStartTime = null;
+  broadcast(session, { type: 'state', session: getPublicSession(session) });
+
+  // مسار احتياطي من الخادم: ينهي إعلان المراكز حتى لو لم يرسل المتصفح تأكيدًا.
+  setTimeout(() => {
+    if (session.state === 'final_reveal') finishSession(session);
+  }, FINAL_REVEAL_DURATION_MS + 500);
+}
+
 function nextQuestion(session) {
-  session.answers.clear();
-  session.currentQuestion++;
-  if (session.currentQuestion >= QUESTIONS.length) {
-    session.state = 'finished';
-    session.finishedAt = Date.now();
-    // Compute final ranking
-    session.teams.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.totalTime - b.totalTime;
-    });
-    broadcast(session, { type: 'state', session: getPublicSession(session) });
+  // لا نزيد المؤشر بعد السؤال الأخير؛ هذه كانت تسبب محاولة قراءة سؤال سادس غير موجود.
+  if (session.currentQuestion >= QUESTIONS.length - 1) {
+    startFinalReveal(session);
     return;
   }
+
+  session.answers.clear();
+  session.currentQuestion++;
   session.state = 'question_active';
   session.questionStartTime = Date.now();
   broadcast(session, { type: 'state', session: getPublicSession(session) });
-  // Auto close after 20s
-  setTimeout(() => closeQuestion(session), 20000);
+  setTimeout(() => closeQuestion(session), QUESTION_DURATION_MS);
 }
 
 function handleAnswer(session, teamId, optionIndex) {
@@ -253,10 +284,10 @@ function handleAnswer(session, teamId, optionIndex) {
   if (!team) return;
 
   const elapsed = Date.now() - session.questionStartTime;
-  const timeRemaining = Math.max(0, 20000 - elapsed);
+  const timeRemaining = Math.max(0, QUESTION_DURATION_MS - elapsed);
   const q = QUESTIONS[session.currentQuestion];
   const correct = optionIndex === q.correct;
-  const score = correct ? Math.round(500 + 500 * timeRemaining / 20000) : 0;
+  const score = correct ? Math.round(500 + 500 * timeRemaining / QUESTION_DURATION_MS) : 0;
 
   session.answers.set(teamId, { option: optionIndex, time: elapsed, score, correct });
   team.score += score;
@@ -266,14 +297,17 @@ function handleAnswer(session, teamId, optionIndex) {
   // Notify hosts of answered status
   broadcast(session, { type: 'answered', teamId, answered: true });
 
-  // If all answered, close early
-  if (session.answers.size === session.teams.length) {
-    closeQuestion(session);
-  }
+  // لا نغلق السؤال مبكرًا: كل سؤال يستمر ٢٠ ثانية كاملة حتى لو أجابت جميع المجموعات.
 }
 
 // Static files
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname), {
+  setHeaders(res, filePath) {
+    if (/\.(?:js|css|html)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+    }
+  }
+}));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
@@ -419,7 +453,7 @@ wss.on('connection', (ws) => {
       session.questionStartTime = Date.now();
       session.answers.clear();
       broadcast(session, { type: 'state', session: getPublicSession(session) });
-      setTimeout(() => closeQuestion(session), 20000);
+      setTimeout(() => closeQuestion(session), QUESTION_DURATION_MS);
       return;
     }
 
@@ -443,13 +477,16 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (msg.type === 'finalize_results' && ws.role === 'host') {
+      const session = sessions.get(ws.sessionId);
+      if (!session) return;
+      if (session.state === 'final_reveal') finishSession(session);
+      return;
+    }
+
     if (msg.type === 'end_session' && ws.role === 'host') {
       const session = sessions.get(ws.sessionId);
-      if (session) {
-        session.state = 'finished';
-        session.finishedAt = Date.now();
-        broadcast(session, { type: 'state', session: getPublicSession(session) });
-      }
+      if (session) finishSession(session);
       return;
     }
 

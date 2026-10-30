@@ -19,6 +19,9 @@ let showJoinedSuccess = false;
 let joinStep = 'code';
 let pendingJoinCode = '';
 let pendingTeamName = '';
+let finalFinalizeSent = false;
+const QUESTION_DURATION_MS = 20000;
+const QUESTION_DURATION_SEC = 20;
 
 const SUGGESTED_NAMES = ['المتألقات', 'العبقريات', 'المبدعات', 'الذكيات', 'المتميزات'];
 
@@ -105,6 +108,7 @@ function handleMessage(msg) {
   }
   if (msg.type === 'state') {
     currentSession = msg.session;
+    if (currentSession.state !== 'final_reveal') finalFinalizeSent = false;
     if (role === 'host' && currentSession.state === 'waiting') startLobbyAudio();
     else stopLobbyAudio();
     if (role === 'host' && currentSession.state === 'finished' && !winnerSoundPlayed) {
@@ -134,9 +138,9 @@ function prepareTeacherAudio() {
   startAudio = new Audio('./audio/start.mp3');
   winnerAudio = new Audio('./audio/winner.mp3');
 
-  lobbyAudio.preload = 'auto';
-  startAudio.preload = 'auto';
-  winnerAudio.preload = 'auto';
+  lobbyAudio.preload = 'metadata';
+  startAudio.preload = 'none';
+  winnerAudio.preload = 'none';
   lobbyAudio.loop = true;
   lobbyAudio.volume = 0.18;
   startAudio.volume = 0.8;
@@ -146,7 +150,6 @@ function prepareTeacherAudio() {
     audio.addEventListener('error', () => {
       console.warn('تعذر تحميل ملف صوت:', audio.currentSrc || audio.src);
     });
-    audio.load();
   }
 
   audioPrepared = true;
@@ -154,26 +157,8 @@ function prepareTeacherAudio() {
 
 function unlockTeacherAudio() {
   if (!isHost() && currentView !== 'host-setup') return;
+  // نجهّز كائنات الصوت فقط. لا نطلب الملفات قبل الحاجة حتى نتجنب Range/416 على الاستضافة.
   prepareTeacherAudio();
-
-  // Called from a teacher click so later sounds are allowed by mobile browsers.
-  [startAudio, winnerAudio].forEach((audio) => {
-    if (!audio) return;
-    const previousMuted = audio.muted;
-    audio.muted = true;
-    const attempt = audio.play();
-    if (attempt && typeof attempt.then === 'function') {
-      attempt.then(() => {
-        audio.pause();
-        audio.currentTime = 0;
-        audio.muted = previousMuted;
-      }).catch(() => {
-        audio.muted = previousMuted;
-      });
-    } else {
-      audio.muted = previousMuted;
-    }
-  });
 }
 
 function startLobbyAudio() {
@@ -414,7 +399,7 @@ function joinTeam() {
 }
 
 function stateText(state) {
-  return { waiting: 'بانتظار المجموعات', question_active: 'السؤال جارٍ', question_reveal: 'عرض الحل', leaderboard: 'عرض الترتيب', finished: 'انتهت الجلسة' }[state] || state;
+  return { waiting: 'بانتظار المجموعات', question_active: 'السؤال جارٍ', question_reveal: 'عرض الحل', leaderboard: 'انتقال', final_reveal: 'إعلان المراكز', finished: 'انتهت الجلسة' }[state] || state;
 }
 
 function renderHost() {
@@ -445,7 +430,7 @@ function renderHost() {
     content = `
       <div class="question-header">
         <div>السؤال ${q.index || (s.currentQuestion + 1)} من ٥</div>
-        <div class="timer" id="timer">٢٠</div>
+        <div class="timer" id="timer">${QUESTION_DURATION_SEC}</div>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
       <div class="category">${qCat}</div>
@@ -482,6 +467,16 @@ function renderHost() {
     content = `
       <h2 style="text-align:center;">جارٍ الانتقال إلى السؤال التالي…</h2>
     `;
+  } else if (s.state === 'final_reveal') {
+    content = `
+      <div class="final-reveal-shell">
+        <div class="final-reveal-kicker">لحظة الحسم</div>
+        <h2>إعلان المراكز النهائية</h2>
+        <p class="final-reveal-subtitle">نبدأ من المركز الثالث وصولًا إلى بطلات التحدي 🏆</p>
+        <div class="reveal-stage" id="reveal-stage"></div>
+        <div class="reveal-progress"><div id="reveal-progress-fill"></div></div>
+      </div>
+    `;
   } else if (s.state === 'finished') {
     const sorted = [...s.teams].sort((a,b) => b.score - a.score || a.totalTime - b.totalTime);
     const winner = sorted[0];
@@ -516,6 +511,61 @@ function renderHost() {
   }
 
   app.innerHTML = `<div class="screen"><div class="screen-inner"><button class="back-btn" onclick="renderHome()">← الرئيسية</button>${content}</div></div>`;
+  if (s.state === 'final_reveal') startFinalRevealAnimation(s);
+}
+
+function startFinalRevealAnimation(session) {
+  clearInterval(timerInterval);
+  const stage = document.getElementById('reveal-stage');
+  const progress = document.getElementById('reveal-progress-fill');
+  if (!stage) return;
+
+  const ranking = session.finalSummary?.ranking || [...(session.teams || [])]
+    .sort((a,b) => b.score - a.score || a.totalTime - b.totalTime)
+    .map((t, index) => ({ ...t, rank: index + 1 }));
+  const podium = ranking.slice(0, 3).reverse(); // الثالث ثم الثاني ثم الأول
+  if (!podium.length) return;
+
+  const start = session.finalRevealStartTime || Date.now();
+  const duration = session.finalRevealDuration || 9000;
+  const slot = duration / podium.length;
+  let lastIndex = -1;
+
+  const medal = rank => rank === 1 ? '🏆' : rank === 2 ? '🥈' : '🥉';
+  const rankLabel = rank => rank === 1 ? 'المركز الأول' : rank === 2 ? 'المركز الثاني' : 'المركز الثالث';
+
+  const tick = () => {
+    const elapsed = Math.max(0, Date.now() - start);
+    const index = Math.min(podium.length - 1, Math.floor(elapsed / slot));
+    if (progress) progress.style.width = `${Math.min(100, (elapsed / duration) * 100)}%`;
+
+    if (index !== lastIndex) {
+      lastIndex = index;
+      const team = podium[index];
+      const isWinner = team.rank === 1;
+      stage.innerHTML = `
+        <div class="reveal-rank-card ${isWinner ? 'winner-reveal' : ''}">
+          <div class="reveal-medal">${medal(team.rank)}</div>
+          <div class="reveal-rank-label">${rankLabel(team.rank)}</div>
+          <div class="reveal-team-symbol">${team.symbol || '★'}</div>
+          <div class="reveal-team-name">${team.name || '—'}</div>
+          <div class="reveal-team-score">${team.score || 0} نقطة</div>
+          ${isWinner ? '<div class="reveal-winner-line">بطلات تحدي حلّها ✨</div>' : '<div class="reveal-next-line">والآن… من في المركز التالي؟</div>'}
+        </div>`;
+      if (isWinner) createConfetti();
+    }
+
+    if (elapsed >= duration) {
+      clearInterval(timerInterval);
+      if (!finalFinalizeSent && currentSession?.state === 'final_reveal') {
+        finalFinalizeSent = true;
+        send({ type: 'finalize_results' });
+      }
+    }
+  };
+
+  tick();
+  timerInterval = setInterval(tick, 120);
 }
 
 function startChallenge() {
@@ -543,7 +593,7 @@ function renderTeam() {
   } else if (s.state === 'question_active') {
     const q = s.question || {};
     content = `
-      <div class="question-header"><div>السؤال ${q.index || (s.currentQuestion+1)} من ٥</div><div class="timer" id="timer">٢٠</div></div>
+      <div class="question-header"><div>السؤال ${q.index || (s.currentQuestion+1)} من ٥</div><div class="timer" id="timer">${QUESTION_DURATION_SEC}</div></div>
       <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
       <div class="category">${q.category || ''}</div>
       <div class="question-text">${q.text || 'جاري تحميل السؤال...'}</div>
@@ -569,6 +619,16 @@ function renderTeam() {
         <div class="student-wait-icon">⏳</div>
         <h2>تم انتهاء السؤال</h2>
         <p>انتظري انتقال المعلمة إلى السؤال التالي.</p>
+      </div>
+    `;
+  } else if (s.state === 'final_reveal') {
+    content = `
+      <div class="student-wait-card final-announcement-wait">
+        <div class="student-wait-icon final-wait-icon">🏆</div>
+        <div class="final-wait-kicker">لحظات الحسم</div>
+        <h2>جارٍ إعلان المراكز النهائية</h2>
+        <p>استعدوا لمعرفة المجموعة الفائزة…</p>
+        <div class="final-wait-pulse"><span></span><span></span><span></span></div>
       </div>
     `;
   } else if (s.state === 'finished') {
@@ -633,14 +693,14 @@ function startTimer(startTime) {
   if (!startTime) startTime = Date.now();
   const update = () => {
     const elapsed = Date.now() - startTime;
-    const remaining = Math.max(0, 20 - Math.floor(elapsed / 1000));
+    const remaining = Math.max(0, QUESTION_DURATION_SEC - Math.floor(elapsed / 1000));
     const timerEl = document.getElementById('timer');
     const progressEl = document.getElementById('progress');
     if (timerEl) {
       timerEl.textContent = remaining;
       timerEl.classList.toggle('pulse', remaining <= 5 && remaining > 0);
     }
-    if (progressEl) progressEl.style.width = `${(elapsed / 20000) * 100}%`;
+    if (progressEl) progressEl.style.width = `${Math.min(100, (elapsed / QUESTION_DURATION_MS) * 100)}%`;
     if (remaining <= 0) clearInterval(timerInterval);
   };
   update();
