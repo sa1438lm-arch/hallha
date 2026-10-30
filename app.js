@@ -7,6 +7,9 @@ let teamId = null;
 let reconnectToken = null;
 let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
 let lobbyAudio = null;
+let startAudio = null;
+let winnerAudio = null;
+let audioPrepared = false;
 let winnerSoundPlayed = false;
 let timerInterval = null;
 let currentView = 'home';
@@ -66,7 +69,10 @@ function handleMessage(msg) {
       }));
     }
     currentSession = msg.session;
-    if (role === 'host') sessionStorage.setItem('hostSession', currentSession.id);
+    if (role === 'host') {
+      sessionStorage.setItem('hostSession', currentSession.id);
+      if (currentSession.state === 'waiting') startLobbyAudio();
+    }
     render();
     return;
   }
@@ -92,23 +98,84 @@ function showError(text) {
 
 function isHost() { return role === 'host'; }
 
-function startLobbyAudio() {
-  if (!isHost() || !soundEnabled || lobbyAudio) return;
-  lobbyAudio = new Audio('/audio/lobby.mp3');
+function prepareTeacherAudio() {
+  if (audioPrepared) return;
+
+  // Relative paths keep audio working on localhost, GitHub/Render-style subpaths,
+  // and normal domains as long as the files stay inside ./audio/.
+  lobbyAudio = new Audio('./audio/lobby.mp3');
+  startAudio = new Audio('./audio/start.mp3');
+  winnerAudio = new Audio('./audio/winner.mp3');
+
+  lobbyAudio.preload = 'auto';
+  startAudio.preload = 'auto';
+  winnerAudio.preload = 'auto';
   lobbyAudio.loop = true;
   lobbyAudio.volume = 0.18;
-  lobbyAudio.play().catch(() => {});
+  startAudio.volume = 0.8;
+  winnerAudio.volume = 0.9;
+
+  for (const audio of [lobbyAudio, startAudio, winnerAudio]) {
+    audio.addEventListener('error', () => {
+      console.warn('تعذر تحميل ملف صوت:', audio.currentSrc || audio.src);
+    });
+    audio.load();
+  }
+
+  audioPrepared = true;
+}
+
+function unlockTeacherAudio() {
+  if (!isHost() && currentView !== 'host-setup') return;
+  prepareTeacherAudio();
+
+  // Called from a teacher click so later sounds are allowed by mobile browsers.
+  [startAudio, winnerAudio].forEach((audio) => {
+    if (!audio) return;
+    const previousMuted = audio.muted;
+    audio.muted = true;
+    const attempt = audio.play();
+    if (attempt && typeof attempt.then === 'function') {
+      attempt.then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.muted = previousMuted;
+      }).catch(() => {
+        audio.muted = previousMuted;
+      });
+    } else {
+      audio.muted = previousMuted;
+    }
+  });
+}
+
+function startLobbyAudio() {
+  if (!isHost() || !soundEnabled) return;
+  prepareTeacherAudio();
+  if (!lobbyAudio) return;
+  lobbyAudio.loop = true;
+  lobbyAudio.volume = 0.18;
+  lobbyAudio.play().catch((err) => console.warn('تعذر تشغيل lobby.mp3:', err));
 }
 function stopLobbyAudio() {
-  if (lobbyAudio) { lobbyAudio.pause(); lobbyAudio = null; }
+  if (lobbyAudio) {
+    lobbyAudio.pause();
+    lobbyAudio.currentTime = 0;
+  }
 }
 function playStart() {
   if (!isHost() || !soundEnabled) return;
-  new Audio('/audio/start.mp3').play().catch(() => {});
+  prepareTeacherAudio();
+  if (!startAudio) return;
+  startAudio.currentTime = 0;
+  startAudio.play().catch((err) => console.warn('تعذر تشغيل start.mp3:', err));
 }
 function playWinner() {
   if (!isHost() || !soundEnabled) return;
-  new Audio('/audio/winner.mp3').play().catch(() => {});
+  prepareTeacherAudio();
+  if (!winnerAudio) return;
+  winnerAudio.currentTime = 0;
+  winnerAudio.play().catch((err) => console.warn('تعذر تشغيل winner.mp3:', err));
 }
 function toggleSound() {
   soundEnabled = !soundEnabled;
@@ -208,6 +275,7 @@ function changeMax(d) {
 }
 
 function createAndOpen() {
+  unlockTeacherAudio();
   connectWS();
   setTimeout(() => {
     send({ type: 'create_single_session', maxGroups });
@@ -382,23 +450,8 @@ function renderHost() {
       <button class="btn btn-primary" style="width:100%;" onclick="goNext()">السؤال التالي</button>
     `;
   } else if (s.state === 'leaderboard') {
-    const sorted = [...s.teams].sort((a,b) => b.score - a.score || a.totalTime - b.totalTime);
     content = `
-      <h2>الترتيب</h2>
-      <div class="leaderboard">
-        ${sorted.map((t, i) => `
-          <div class="rank-item ${i===0?'first':''}">
-            <span class="rank">${i+1}</span>
-            <span class="symbol">${t.symbol}</span>
-            <span>${t.name}</span>
-            <span class="score">${t.score} نقطة</span>
-            ${i===0 ? '<span style="color:#F4C542;">🏆</span>' : ''}
-          </div>
-        `).join('')}
-      </div>
-      <button class="btn btn-primary" style="width:100%; margin-top:24px;" onclick="goNext()">
-        ${s.currentQuestion >= 4 ? 'النتيجة النهائية' : 'السؤال التالي'}
-      </button>
+      <h2 style="text-align:center;">جارٍ الانتقال إلى السؤال التالي…</h2>
     `;
   } else if (s.state === 'finished') {
     const sorted = [...s.teams].sort((a,b) => b.score - a.score || a.totalTime - b.totalTime);
@@ -480,16 +533,21 @@ function renderTeam() {
       <div class="options">${(r.options || []).map((opt, i) => `<div class="option ${i === r.correct ? 'correct' : ''}">${opt}</div>`).join('')}</div>
       <div class="solution">${r.solution || ''}</div>
     `;
-  } else if (s.state === 'leaderboard' || s.state === 'finished') {
-    const sorted = [...s.teams].sort((a,b) => b.score - a.score || a.totalTime - b.totalTime);
+  } else if (s.state === 'leaderboard') {
     content = `
-      <h2>${s.state === 'finished' ? 'النتيجة النهائية' : 'الترتيب'}</h2>
-      <div class="leaderboard">
-        ${sorted.map((t, i) => `<div class="rank-item ${i===0?'first':''} ${t.id===teamId?'connected':''}"><span class="rank">${i+1}</span><span class="symbol">${t.symbol}</span><span>${t.name}</span><span class="score">${t.score} نقطة</span></div>`).join('')}
-      </div>
-      ${s.state === 'finished' ? '<div style="text-align:center; margin-top:24px; font-size:20px;">أحسنتِ!</div>' : ''}
+      <h2 style="text-align:center;">استعدي للسؤال التالي</h2>
+      <div style="text-align:center; margin-top:18px; color:#6B6580;">سيظهر السؤال التالي عند متابعة المعلمة.</div>
     `;
-    if (s.state === 'finished') createConfetti();
+  } else if (s.state === 'finished') {
+    content = `
+      <div class="final-student-message">
+        <div class="final-student-icon">✓</div>
+        <h2>انتهى التحدي</h2>
+        <p>أحسنتِ المشاركة 🌟</p>
+        <p class="muted-note">ستظهر النتيجة النهائية والترتيب على شاشة المعلمة.</p>
+      </div>
+    `;
+    createConfetti();
   }
   app.innerHTML = `<div class="screen"><div class="screen-inner">${content}</div></div>`;
   if (joinedNow) {

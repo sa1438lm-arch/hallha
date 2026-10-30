@@ -397,9 +397,8 @@ wss.on('connection', (ws) => {
       const session = sessions.get(ws.sessionId);
       if (!session) return;
       if (session.state === 'question_reveal') {
-        session.state = 'leaderboard';
-        broadcast(session, { type: 'state', session: getPublicSession(session) });
-      } else if (session.state === 'leaderboard') {
+        // الانتقال مباشرة إلى السؤال التالي بدون عرض ترتيب بين الأسئلة.
+        // بعد آخر سؤال تقوم nextQuestion بتحويل الجلسة إلى finished تلقائياً.
         nextQuestion(session);
       } else if (session.state === 'finished') {
         // already finished
