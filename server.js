@@ -79,10 +79,11 @@ function generateReconnectToken() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-function createSession() {
+function createSession(maxGroups = 5) {
   const id = generateSessionId();
   const code = generateJoinCode();
   const session = {
+    maxGroups: Math.min(5, Math.max(2, maxGroups)),
     id,
     code,
     state: 'waiting',
@@ -108,6 +109,7 @@ function getPublicSession(session, forTeam = false) {
     state: session.state,
     currentQuestion: session.currentQuestion,
     teamCount: session.teams.length,
+    maxGroups: session.maxGroups || 5,
     teams: session.teams.map(t => ({
       id: t.id,
       name: t.name,
@@ -258,14 +260,13 @@ wss.on('connection', (ws) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
 
-    if (msg.type === 'create_sessions') {
-      const count = Math.min(10, Math.max(1, parseInt(msg.count) || 1));
-      const created = [];
-      for (let i = 0; i < count; i++) {
-        const s = createSession();
-        created.push({ id: s.id, code: s.code, state: s.state, teamCount: 0 });
-      }
-      sendTo(ws, { type: 'sessions_created', sessions: created });
+    if (msg.type === 'create_single_session') {
+      const maxG = Math.min(5, Math.max(2, parseInt(msg.maxGroups) || 5));
+      const s = createSession(maxG);
+      ws.sessionId = s.id;
+      ws.role = 'host';
+      s.hostSockets.add(ws);
+      sendTo(ws, { type: 'joined', role: 'host', session: getPublicSession(s) });
       return;
     }
 
@@ -298,7 +299,7 @@ wss.on('connection', (ws) => {
       const session = sessions.get(sessionId);
       if (!session) return sendTo(ws, { type: 'error', message: 'رمز الجلسة غير صحيح' });
       if (session.state !== 'waiting') return sendTo(ws, { type: 'error', message: 'بدأ التحدي بالفعل' });
-      if (session.teams.length >= 5) return sendTo(ws, { type: 'error', message: 'اكتمل عدد المجموعات في هذه الجلسة' });
+      if (session.teams.length >= (session.maxGroups || 5)) return sendTo(ws, { type: 'error', message: 'اكتمل عدد المجموعات في هذه الجلسة' });
 
       const name = (msg.name || '').trim().slice(0, 30) || 'مجموعة';
       if (session.teams.some(t => t.name === name)) return sendTo(ws, { type: 'error', message: 'اسم المجموعة مستخدم بالفعل' });
