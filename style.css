@@ -278,3 +278,190 @@ input:focus { outline: none; border-color: #6C5CE7; }
   text-align: center;
   box-shadow: 0 10px 24px rgba(16, 185, 129, .10);
 }
+
+
+.helper-text {
+  color: var(--muted);
+  font-size: 14px;
+  margin: -4px 0 18px;
+  line-height: 1.7;
+}
+
+.join-screen {
+  max-width: 640px;
+}
+
+.join-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.join-header h2 {
+  font-size: clamp(30px, 5vw, 44px);
+  color: #1E1A3A;
+  margin-bottom: 8px;
+}
+.join-header p {
+  color: var(--muted);
+  line-height: 1.8;
+  font-size: 16px;
+}
+
+.join-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.join-step-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #F8F7FC;
+  border: 1px solid #EDE9FE;
+  border-radius: 16px;
+  padding: 12px 14px;
+  color: var(--muted);
+}
+.join-step-item span {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #EDE9FE;
+  color: #4C3A78;
+  font-weight: 800;
+}
+.join-step-item strong {
+  font-size: 15px;
+}
+.join-step-item.active {
+  border-color: #6C5CE7;
+  background: rgba(108,92,231,0.08);
+  color: #1E1A3A;
+}
+.join-step-item.done span,
+.join-step-item.active span {
+  background: #6C5CE7;
+  color: #fff;
+}
+.join-step-line {
+  width: 20px;
+  height: 2px;
+  background: #D9D1FA;
+  flex: 0 0 20px;
+}
+
+.join-card {
+  background: #fff;
+  border: 1px solid #F1EDFF;
+  border-radius: 22px;
+  padding: 24px;
+  box-shadow: 0 18px 45px rgba(15, 12, 41, 0.08);
+}
+
+.code-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #F8F7FC;
+  color: #4C3A78;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.join-main-btn {
+  width: 100%;
+}
+.join-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+.btn-light {
+  background: #F8F7FC;
+  color: #4C3A78;
+  border: 1px solid #E5E7EB;
+}
+.btn-light:hover { transform: translateY(-2px); }
+
+/* Better wrapping on narrow screens */
+.team-item,
+.rank-item {
+  flex-wrap: wrap;
+}
+
+label {
+  display: block;
+  font-weight: 700;
+  color: #1E1A3A;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1024px) {
+  .screen-inner {
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  #app { padding: 12px; }
+  .screen { padding: 0; min-height: auto; }
+  .screen-inner {
+    border-radius: 22px;
+    padding: 24px 18px;
+    min-height: auto;
+  }
+  .home-header { padding: 46px 12px 24px; }
+  .cards { grid-template-columns: 1fr; gap: 18px; margin-top: 28px; }
+  .card { padding: 26px 18px; }
+  .counter { gap: 16px; font-size: 26px; }
+  .counter button { width: 52px; height: 52px; }
+  .lobby-code { letter-spacing: 8px; font-size: clamp(34px, 11vw, 64px); }
+  .question-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .timer { font-size: 34px; }
+  .question-text { font-size: clamp(20px, 6vw, 28px); line-height: 1.7; }
+  .option { min-height: 68px; padding: 16px 14px; font-size: 16px; }
+  .team-item,
+  .rank-item {
+    padding: 14px 16px;
+    font-size: 16px;
+  }
+  .rank-item .score { margin-right: 0; width: 100%; }
+  .join-progress { flex-direction: column; align-items: stretch; }
+  .join-step-line { display: none; }
+  .join-card { padding: 18px; border-radius: 18px; }
+  .join-actions { grid-template-columns: 1fr; }
+  .sound-toggle { left: 12px; top: 12px; padding: 10px 12px; }
+}
+
+@media (max-width: 480px) {
+  body { font-size: 15px; }
+  .screen-inner { padding: 20px 14px; }
+  .back-btn { font-size: 15px; }
+  input[type="text"] {
+    font-size: 16px;
+    padding: 14px 14px;
+    min-height: 52px;
+  }
+  .btn {
+    min-height: 52px;
+    font-size: 17px;
+    padding: 14px 18px;
+  }
+  .join-header h2 { font-size: 34px; }
+  .join-header p,
+  .helper-text { font-size: 14px; }
+  .suggestions { gap: 6px; }
+  .suggestion { width: auto; font-size: 13px; padding: 8px 12px; }
+}

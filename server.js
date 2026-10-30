@@ -284,6 +284,26 @@ wss.on('connection', (ws) => {
       return;
     }
 
+
+    if (msg.type === 'validate_code') {
+      const sessionId = codeToSession.get(msg.code);
+      const session = sessions.get(sessionId);
+      if (!session) return sendTo(ws, { type: 'error', message: 'رمز الجلسة غير صحيح' });
+      if (session.state !== 'waiting') return sendTo(ws, { type: 'error', message: 'بدأ التحدي بالفعل' });
+      if (session.teams.length >= (session.maxGroups || 5)) return sendTo(ws, { type: 'error', message: 'اكتمل عدد المجموعات في هذه الجلسة' });
+      sendTo(ws, {
+        type: 'code_validated',
+        code: msg.code,
+        session: {
+          id: session.id,
+          code: session.code,
+          teamCount: session.teams.length,
+          maxGroups: session.maxGroups || 5
+        }
+      });
+      return;
+    }
+
     if (msg.type === 'join_as_host') {
       const session = sessions.get(msg.sessionId);
       if (!session) return sendTo(ws, { type: 'error', message: 'الجلسة غير موجودة' });

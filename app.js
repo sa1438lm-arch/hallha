@@ -13,6 +13,9 @@ let currentView = 'home';
 let maxGroups = 5;
 let pendingTeamJoin = false;
 let showJoinedSuccess = false;
+let joinStep = 'code';
+let pendingJoinCode = '';
+let pendingTeamName = '';
 
 const SUGGESTED_NAMES = ['المتألقات', 'العبقريات', 'المبدعات', 'الذكيات', 'المتميزات'];
 
@@ -55,6 +58,12 @@ function handleMessage(msg) {
     currentSession = msg.session;
     if (role === 'host') sessionStorage.setItem('hostSession', currentSession.id);
     render();
+    return;
+  }
+  if (msg.type === 'code_validated') {
+    pendingJoinCode = msg.code || pendingJoinCode;
+    joinStep = 'name';
+    renderJoin();
     return;
   }
   if (msg.type === 'state') {
@@ -203,25 +212,11 @@ function createAndOpen() {
 
 function showJoin() {
   currentView = 'join';
-  app.innerHTML = `
-    <div class="screen">
-      <div class="screen-inner" style="max-width:480px;">
-        <button class="back-btn" onclick="renderHome()">← العودة</button>
-        <h2>انضمي إلى التحدي</h2>
-        <label>رمز الجلسة</label>
-        <input type="text" id="join-code" maxlength="6" placeholder="٦ أرقام" inputmode="numeric">
-        <button class="btn btn-primary" style="width:100%;" onclick="checkCode()">دخول</button>
-        <div id="name-section" style="display:none; margin-top:24px;">
-          <label>اسم المجموعة</label>
-          <input type="text" id="team-name" placeholder="اكتبي اسم المجموعة" maxlength="30">
-          <div class="suggestions">
-            ${SUGGESTED_NAMES.map(n => `<button class="suggestion" onclick="document.getElementById('team-name').value='${n}'">${n}</button>`).join('')}
-          </div>
-          <button class="btn btn-gold" style="width:100%;" onclick="joinTeam()">انضمام</button>
-        </div>
-      </div>
-    </div>
-  `;
+  joinStep = 'code';
+  pendingJoinCode = '';
+  pendingTeamName = '';
+  renderJoin();
+
   const saved = localStorage.getItem('teamReconnect');
   if (saved) {
     try {
@@ -234,19 +229,82 @@ function showJoin() {
   }
 }
 
+function renderJoin() {
+  currentView = 'join';
+  const isNameStep = joinStep === 'name';
+  const codeValue = pendingJoinCode || '';
+  const teamNameValue = pendingTeamName || '';
+
+  app.innerHTML = `
+    <div class="screen">
+      <div class="screen-inner join-screen">
+        <button class="back-btn" onclick="${isNameStep ? 'backToJoinCodeStep()' : 'renderHome()'}">← ${isNameStep ? 'تغيير الرمز' : 'العودة'}</button>
+
+        <div class="join-header">
+          <h2>انضمي إلى التحدي</h2>
+          <p>${isNameStep ? 'اختاري اسم المجموعة ثم أكملي الانضمام.' : 'أدخلي رمز الجلسة أولًا، ثم اختاري اسم المجموعة.'}</p>
+        </div>
+
+        <div class="join-progress">
+          <div class="join-step-item ${!isNameStep ? 'active' : 'done'}"><span>١</span><strong>دخول الجلسة</strong></div>
+          <div class="join-step-line"></div>
+          <div class="join-step-item ${isNameStep ? 'active' : ''}"><span>٢</span><strong>اسم المجموعة</strong></div>
+        </div>
+
+        ${!isNameStep ? `
+          <div class="join-card">
+            <label>رمز الجلسة</label>
+            <input type="text" id="join-code" maxlength="6" value="${codeValue}" placeholder="٦ أرقام" inputmode="numeric" autocomplete="off">
+            <div class="helper-text">بعد الضغط على «دخول» ستنتقلين لاختيار اسم المجموعة.</div>
+            <button class="btn btn-primary join-main-btn" onclick="checkCode()">دخول</button>
+          </div>
+        ` : `
+          <div class="join-card">
+            <div class="code-summary">رمز الجلسة: <strong>${codeValue}</strong></div>
+            <label>اسم المجموعة</label>
+            <input type="text" id="team-name" maxlength="30" value="${teamNameValue}" placeholder="اكتبي اسم المجموعة" oninput="pendingTeamName=this.value">
+            <div class="suggestions">
+              ${SUGGESTED_NAMES.map(n => `<button class="suggestion" onclick="setSuggestedName('${n}')">${n}</button>`).join('')}
+            </div>
+            <div class="join-actions">
+              <button class="btn btn-light" onclick="backToJoinCodeStep()">رجوع</button>
+              <button class="btn btn-gold join-main-btn" onclick="joinTeam()">انضمام</button>
+            </div>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function backToJoinCodeStep() {
+  joinStep = 'code';
+  renderJoin();
+}
+
 function checkCode() {
-  const code = document.getElementById('join-code').value.trim();
+  const codeInput = document.getElementById('join-code');
+  const code = codeInput ? codeInput.value.trim() : pendingJoinCode;
   if (!/^\d{6}$/.test(code)) return showError('رمز الجلسة غير صحيح');
-  document.getElementById('name-section').style.display = 'block';
-  window._pendingCode = code;
+  pendingJoinCode = code;
+  connectWS();
+  setTimeout(() => send({ type: 'validate_code', code }), 150);
+}
+
+function setSuggestedName(name) {
+  pendingTeamName = name;
+  const input = document.getElementById('team-name');
+  if (input) input.value = name;
 }
 
 function joinTeam() {
-  const name = document.getElementById('team-name').value.trim();
+  const input = document.getElementById('team-name');
+  const name = (input ? input.value : pendingTeamName).trim();
   if (!name) return showError('يرجى إدخال اسم المجموعة');
+  pendingTeamName = name;
   pendingTeamJoin = true;
   connectWS();
-  setTimeout(() => send({ type: 'join_as_team', code: window._pendingCode, name }), 200);
+  setTimeout(() => send({ type: 'join_as_team', code: pendingJoinCode, name }), 200);
 }
 
 function stateText(state) {
