@@ -134,7 +134,8 @@ function getPublicSession(session, forTeam = false) {
       timeLimit: 20
     };
   }
-  if (session.state === 'question_reveal' || session.state === 'leaderboard' || session.state === 'finished') {
+  // كشف الحل خاص بشاشة المعلم فقط ولا يُرسل للطالبات.
+  if (!forTeam && (session.state === 'question_reveal' || session.state === 'leaderboard' || session.state === 'finished')) {
     const q = QUESTIONS[session.currentQuestion];
     base.reveal = {
       category: q.category,
@@ -156,6 +157,19 @@ function getPublicSession(session, forTeam = false) {
       })
     };
   }
+
+  if (session.state === 'finished') {
+    const sorted = [...session.teams].sort((a, b) => b.score - a.score || a.totalTime - b.totalTime);
+    const winner = sorted[0] || null;
+    const totalCorrect = session.teams.reduce((sum, t) => sum + (t.correctCount || 0), 0);
+    const totalPossible = session.teams.length * QUESTIONS.length;
+    base.finalSummary = {
+      winner: winner ? { id: winner.id, name: winner.name, symbol: winner.symbol, score: winner.score } : null,
+      totalCorrect,
+      totalPossible,
+      accuracy: totalPossible ? Math.round((totalCorrect / totalPossible) * 100) : 0
+    };
+  }
   return base;
 }
 
@@ -167,9 +181,9 @@ function broadcast(session, data, excludeWs = null) {
       ws.send(baseMsg);
     }
   }
-  // Teams get version with question if active
+  // الطالبات يحصلن دائمًا على نسخة آمنة من حالة الجلسة بدون كشف الحل أو الترتيب.
   const teamData = { ...data };
-  if (data.session && session.state === 'question_active') {
+  if (data.session) {
     teamData.session = getPublicSession(session, true);
   }
   const teamMsg = JSON.stringify(teamData);

@@ -524,27 +524,33 @@ function renderTeam() {
       <div id="answer-status" style="text-align:center; margin-top:16px; font-weight:700; color:#4C3A78;"></div>
     `;
     startTimer(s.questionStartTime);
-  } else if (s.state === 'question_reveal') {
-    const r = s.reveal || {};
+  } else if (s.state === 'question_reveal' || s.state === 'leaderboard') {
     content = `
-      <h2>كشف الحل</h2>
-      <div class="category">${r.category || ''}</div>
-      <div class="question-text">${r.text || ''}</div>
-      <div class="options">${(r.options || []).map((opt, i) => `<div class="option ${i === r.correct ? 'correct' : ''}">${opt}</div>`).join('')}</div>
-      <div class="solution">${r.solution || ''}</div>
-    `;
-  } else if (s.state === 'leaderboard') {
-    content = `
-      <h2 style="text-align:center;">استعدي للسؤال التالي</h2>
-      <div style="text-align:center; margin-top:18px; color:#6B6580;">سيظهر السؤال التالي عند متابعة المعلمة.</div>
+      <div class="student-wait-card">
+        <div class="student-wait-icon">⏳</div>
+        <h2>تم انتهاء السؤال</h2>
+        <p>انتظري انتقال المعلمة إلى السؤال التالي.</p>
+      </div>
     `;
   } else if (s.state === 'finished') {
+    const summary = s.finalSummary || {};
+    const winner = summary.winner || {};
     content = `
-      <div class="final-student-message">
-        <div class="final-student-icon">✓</div>
-        <h2>انتهى التحدي</h2>
-        <p>أحسنتِ المشاركة 🌟</p>
-        <p class="muted-note">ستظهر النتيجة النهائية والترتيب على شاشة المعلمة.</p>
+      <div class="student-final-celebration">
+        <div class="celebration-stars" aria-hidden="true">✦ ✧ ✦</div>
+        <div class="winner-cup" aria-hidden="true">🏆</div>
+        <div class="final-kicker">النتيجة النهائية</div>
+        <h2>مبروك للمجموعة الفائزة!</h2>
+        <div class="student-winner-card">
+          <div class="winner-symbol">${winner.symbol || '★'}</div>
+          <div class="winner-name">${winner.name || 'المجموعة الفائزة'}</div>
+          <div class="winner-score">${winner.score ?? 0} نقطة</div>
+        </div>
+        <div class="student-final-stats">
+          <div><strong>${summary.totalCorrect ?? 0}</strong><span>إجابة صحيحة</span></div>
+          <div><strong>${summary.accuracy ?? 0}٪</strong><span>دقة الفصل</span></div>
+        </div>
+        <p class="celebration-note">أحسنتن جميعًا 🌟</p>
       </div>
     `;
     createConfetti();

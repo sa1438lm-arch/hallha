@@ -492,3 +492,138 @@ label {
 .final-student-message h2 { margin-bottom: 10px; }
 .final-student-message p { font-size: 18px; line-height: 1.8; }
 .final-student-message .muted-note { color: var(--muted); font-size: 15px; margin-top: 8px; }
+
+/* Student waiting state: no solution is shown */
+.student-wait-card {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 36px 20px;
+}
+.student-wait-icon {
+  font-size: clamp(52px, 10vw, 82px);
+  margin-bottom: 16px;
+}
+.student-wait-card h2 {
+  font-size: clamp(28px, 5vw, 42px);
+  color: #1E1A3A;
+  margin-bottom: 10px;
+}
+.student-wait-card p {
+  color: #6B6580;
+  font-size: clamp(16px, 2.5vw, 20px);
+}
+
+/* Final celebration shown to students without the full ranking */
+.student-final-celebration {
+  position: relative;
+  overflow: hidden;
+  min-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: clamp(28px, 5vw, 56px) 18px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(244,197,66,.22), transparent 34%),
+    linear-gradient(145deg, #fffdf4 0%, #ffffff 55%, #f5f1ff 100%);
+  border: 2px solid rgba(244,197,66,.35);
+}
+.celebration-stars {
+  font-size: clamp(26px, 5vw, 42px);
+  color: #F4C542;
+  letter-spacing: 12px;
+  margin-bottom: 2px;
+  animation: celebrationFloat 1.8s ease-in-out infinite alternate;
+}
+.winner-cup {
+  font-size: clamp(76px, 15vw, 132px);
+  line-height: 1;
+  filter: drop-shadow(0 14px 24px rgba(244,197,66,.28));
+  animation: cupPop .8s cubic-bezier(.2,.8,.2,1) both;
+}
+.final-kicker {
+  margin-top: 12px;
+  font-weight: 800;
+  color: #6C5CE7;
+  background: #EDE9FE;
+  padding: 8px 16px;
+  border-radius: 999px;
+}
+.student-final-celebration h2 {
+  font-size: clamp(28px, 6vw, 48px);
+  color: #1E1A3A;
+  margin: 14px 0 20px;
+}
+.student-winner-card {
+  width: min(100%, 520px);
+  padding: clamp(20px, 4vw, 32px);
+  border-radius: 24px;
+  background: #fff;
+  border: 2px solid #F4C542;
+  box-shadow: 0 18px 44px rgba(80,62,132,.12);
+}
+.winner-symbol {
+  font-size: 38px;
+  color: #6C5CE7;
+}
+.winner-name {
+  margin-top: 6px;
+  font-size: clamp(28px, 6vw, 44px);
+  font-weight: 900;
+  color: #1E1A3A;
+}
+.winner-score {
+  margin-top: 8px;
+  font-size: clamp(20px, 4vw, 28px);
+  font-weight: 800;
+  color: #B58400;
+}
+.student-final-stats {
+  width: min(100%, 520px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.student-final-stats > div {
+  padding: 16px 12px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.82);
+  border: 1px solid #EDE9FE;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.student-final-stats strong {
+  font-size: clamp(24px, 5vw, 34px);
+  color: #4C3A78;
+}
+.student-final-stats span {
+  color: #6B6580;
+  font-size: 14px;
+}
+.celebration-note {
+  margin-top: 20px;
+  font-size: clamp(18px, 3vw, 22px);
+  font-weight: 800;
+  color: #4C3A78;
+}
+@keyframes cupPop {
+  0% { transform: scale(.4) rotate(-8deg); opacity: 0; }
+  70% { transform: scale(1.1) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes celebrationFloat {
+  from { transform: translateY(0); opacity: .75; }
+  to { transform: translateY(-8px); opacity: 1; }
+}
+@media (max-width: 520px) {
+  .student-final-celebration { min-height: 68vh; border-radius: 20px; }
+  .student-final-stats { grid-template-columns: 1fr; }
+}
