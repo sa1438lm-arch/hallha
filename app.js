@@ -26,11 +26,38 @@ function connectWS() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${location.host}`);
-  ws.onopen = () => console.log('متصل');
+  ws.onopen = () => {
+    console.log('متصل');
+
+    // كل تبويب يحتفظ بهوية مجموعته بشكل مستقل، ثم يستعيد حالته فور عودة الاتصال.
+    // هذا يمنع مجموعة من سرقة اتصال مجموعة أخرى عند استخدام أكثر من تبويب على الجهاز نفسه.
+    if (!pendingTeamJoin) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('teamReconnect') || 'null');
+        if (saved?.sessionId && saved?.teamId && saved?.token) {
+          reconnectToken = saved.token;
+          ws.send(JSON.stringify({
+            type: 'reconnect_team',
+            sessionId: saved.sessionId,
+            teamId: saved.teamId,
+            token: saved.token
+          }));
+          return;
+        }
+      } catch {}
+    }
+
+    const hostSaved = sessionStorage.getItem('hostSession');
+    if (role === 'host' && hostSaved) {
+      ws.send(JSON.stringify({ type: 'join_as_host', sessionId: hostSaved }));
+    }
+  };
   ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
   ws.onclose = () => {
-    showError('فقد الاتصال — نحاول إعادة الاتصال');
-    setTimeout(connectWS, 2000);
+    if (role === 'team' || role === 'host' || currentSession) {
+      showError('فقد الاتصال — تتم إعادة المزامنة تلقائيًا');
+    }
+    setTimeout(connectWS, 1200);
   };
 }
 
@@ -62,7 +89,7 @@ function handleMessage(msg) {
       showJoinedSuccess = pendingTeamJoin;
       pendingTeamJoin = false;
       currentView = 'team';
-      localStorage.setItem('teamReconnect', JSON.stringify({
+      sessionStorage.setItem('teamReconnect', JSON.stringify({
         sessionId: msg.session?.id,
         teamId,
         token: reconnectToken
@@ -289,7 +316,7 @@ function showJoin() {
   pendingTeamName = '';
   renderJoin();
 
-  const saved = localStorage.getItem('teamReconnect');
+  const saved = sessionStorage.getItem('teamReconnect');
   if (saved) {
     try {
       const data = JSON.parse(saved);
@@ -554,11 +581,26 @@ function renderTeam() {
       </div>
     `;
     createConfetti();
+  } else {
+    // لا نترك شاشة أي مجموعة فارغة حتى لو وصلت حالة غير متوقعة أثناء إعادة المزامنة.
+    content = `
+      <div class="student-wait-card">
+        <div class="student-wait-icon">⏳</div>
+        <h2>جارٍ مزامنة التحدي</h2>
+        <p>سيتم تحديث الشاشة تلقائيًا خلال لحظات.</p>
+      </div>
+    `;
+    requestCurrentState();
   }
   app.innerHTML = `<div class="screen"><div class="screen-inner">${content}</div></div>`;
   if (joinedNow) {
     setTimeout(() => document.getElementById('join-success')?.remove(), 3500);
   }
+}
+
+function requestCurrentState() {
+  if (!currentSession?.id) return;
+  send({ type: 'sync_state', sessionId: currentSession.id });
 }
 
 function selectOption(el, index) {
@@ -605,13 +647,21 @@ function createConfetti() {
   }
 }
 
-connectWS();
-renderHome();
-
+// استعادة حالة نفس التبويب عند التحديث، مع بقاء كل مجموعة مستقلة عن بقية التبويبات.
+const storedTeamReconnect = (() => {
+  try { return JSON.parse(sessionStorage.getItem('teamReconnect') || 'null'); }
+  catch { return null; }
+})();
 const hostSaved = sessionStorage.getItem('hostSession');
-if (hostSaved) {
-  setTimeout(() => {
-    currentView = 'host';
-    send({ type: 'join_as_host', sessionId: hostSaved });
-  }, 400);
+
+if (storedTeamReconnect?.sessionId && storedTeamReconnect?.teamId && storedTeamReconnect?.token) {
+  currentView = 'team';
+  teamId = storedTeamReconnect.teamId;
+  reconnectToken = storedTeamReconnect.token;
+} else if (hostSaved) {
+  currentView = 'host';
+  role = 'host';
 }
+
+connectWS();
+if (!storedTeamReconnect && !hostSaved) renderHome();

@@ -7,6 +7,19 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+// Heartbeat keeps realtime sockets healthy behind mobile networks and hosting proxies.
+const heartbeatInterval = setInterval(() => {
+  for (const client of wss.clients) {
+    if (client.isAlive === false) {
+      try { client.terminate(); } catch {}
+      continue;
+    }
+    client.isAlive = false;
+    try { client.ping(); } catch {}
+  }
+}, 25000);
+wss.on('close', () => clearInterval(heartbeatInterval));
+
 const PORT = process.env.PORT || 3000;
 
 // In-memory store
@@ -267,6 +280,8 @@ app.get('/', (req, res) => {
 });
 
 wss.on('connection', (ws) => {
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
   ws.sessionId = null;
   ws.role = null; // 'host' | 'team'
   ws.teamId = null;
@@ -384,6 +399,14 @@ wss.on('connection', (ws) => {
 
       sendTo(ws, { type: 'joined', role: 'team', teamId: team.id, session: getPublicSession(session, true) });
       broadcast(session, { type: 'state', session: getPublicSession(session) });
+      return;
+    }
+
+    if (msg.type === 'sync_state') {
+      const session = sessions.get(ws.sessionId || msg.sessionId);
+      if (!session) return sendTo(ws, { type: 'error', message: 'تعذر مزامنة الجلسة' });
+      const forTeam = ws.role === 'team';
+      sendTo(ws, { type: 'state', session: getPublicSession(session, forTeam) });
       return;
     }
 
