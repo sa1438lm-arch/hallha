@@ -122,10 +122,19 @@ function renderHome() {
   currentSession = null;
   stopLobbyAudio();
   app.innerHTML = `
-    <div class="math-bg">
-      ${['π','√','×','÷','+','−','△','◇','x²','E=mc²'].map((s,i) => 
-        `<span style="left:${8+i*10}%; top:${15+i*8}%; animation-delay:${i*1.8}s">${s}</span>`
-      ).join('')}
+    <div class="digital-space">
+      <div class="grid-floor"></div>
+      <div class="glow glow-blue"></div>
+      <div class="glow glow-purple"></div>
+      <div class="glow glow-orange"></div>
+      <div class="particles">
+        <span style="--i:1;--x:12vw;--y:18vh;--s:1.4;">∫ f(x)dx</span>
+        <span style="--i:2;--x:78vw;--y:14vh;--s:1.2;">E=mc²</span>
+        <span style="--i:3;--x:48vw;--y:48vh;--s:1.8;">π ≈ 3.14</span>
+        <span style="--i:4;--x:22vw;--y:72vh;--s:1.1;">∑ n=1∞</span>
+        <span style="--i:5;--x:72vw;--y:78vh;--s:1.6;">√(x²+y²)</span>
+        <span style="--i:6;--x:38vw;--y:12vh;--s:1.3;">dx/dt</span>
+      </div>
     </div>
     <div class="container">
       <div class="home-header">
@@ -405,10 +414,14 @@ function renderTeam() {
 
 function selectOption(el, index) {
   if (el.parentElement.classList.contains('locked')) return;
-  document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+  document.querySelectorAll('.option').forEach(o => {
+    o.classList.remove('selected');
+    o.style.pointerEvents = 'none';
+  });
   el.classList.add('selected');
   el.parentElement.classList.add('locked');
-  document.getElementById('answer-status').textContent = 'تم اعتماد الإجابة';
+  const status = document.getElementById('answer-status');
+  if (status) status.textContent = '✓ تم اعتماد إجابتك ولا يمكن تغييرها';
   send({ type: 'answer', option: index });
 }
 
