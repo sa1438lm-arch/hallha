@@ -20,7 +20,7 @@ let pendingTeamName = '';
 const SUGGESTED_NAMES = ['المتألقات', 'العبقريات', 'المبدعات', 'الذكيات', 'المتميزات'];
 
 function connectWS() {
-  if (ws && ws.readyState === WebSocket.OPEN) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${location.host}`);
   ws.onopen = () => console.log('متصل');
@@ -32,7 +32,17 @@ function connectWS() {
 }
 
 function send(msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  const payload = JSON.stringify(msg);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(payload);
+    return;
+  }
+  connectWS();
+  if (ws && ws.readyState === WebSocket.CONNECTING) {
+    ws.addEventListener('open', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(payload);
+    }, { once: true });
+  }
 }
 
 function handleMessage(msg) {
@@ -58,12 +68,6 @@ function handleMessage(msg) {
     currentSession = msg.session;
     if (role === 'host') sessionStorage.setItem('hostSession', currentSession.id);
     render();
-    return;
-  }
-  if (msg.type === 'code_validated') {
-    pendingJoinCode = msg.code || pendingJoinCode;
-    joinStep = 'name';
-    renderJoin();
     return;
   }
   if (msg.type === 'state') {
@@ -282,13 +286,20 @@ function backToJoinCodeStep() {
   renderJoin();
 }
 
+function normalizeDigits(value) {
+  return String(value || '')
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+    .replace(/\s+/g, '');
+}
+
 function checkCode() {
   const codeInput = document.getElementById('join-code');
-  const code = codeInput ? codeInput.value.trim() : pendingJoinCode;
-  if (!/^\d{6}$/.test(code)) return showError('رمز الجلسة غير صحيح');
+  const code = normalizeDigits(codeInput ? codeInput.value : pendingJoinCode);
+  if (!/^\d{6}$/.test(code)) return showError('أدخلي رمز الجلسة المكوّن من ٦ أرقام');
   pendingJoinCode = code;
-  connectWS();
-  setTimeout(() => send({ type: 'validate_code', code }), 150);
+  joinStep = 'name';
+  renderJoin();
 }
 
 function setSuggestedName(name) {
@@ -304,7 +315,7 @@ function joinTeam() {
   pendingTeamName = name;
   pendingTeamJoin = true;
   connectWS();
-  setTimeout(() => send({ type: 'join_as_team', code: pendingJoinCode, name }), 200);
+  setTimeout(() => send({ type: 'join_as_team', code: normalizeDigits(pendingJoinCode), name }), 200);
 }
 
 function stateText(state) {
