@@ -474,7 +474,9 @@ function renderHost() {
         ${(r.options || []).map((opt, i) => `<div class="option ${i === r.correct ? 'correct' : ''}">${opt}</div>`).join('')}
       </div>
       <div class="solution">${r.solution || ''}</div>
-      <button class="btn btn-primary" style="width:100%;" onclick="goNext()">السؤال التالي</button>
+      <button class="btn ${s.currentQuestion >= 4 ? 'btn-gold final-result-btn' : 'btn-primary'}" style="width:100%;" onclick="goNext()">
+        ${s.currentQuestion >= 4 ? '🏆 عرض النتيجة النهائية' : 'السؤال التالي'}
+      </button>
     `;
   } else if (s.state === 'leaderboard') {
     content = `
@@ -552,7 +554,17 @@ function renderTeam() {
     `;
     startTimer(s.questionStartTime);
   } else if (s.state === 'question_reveal' || s.state === 'leaderboard') {
-    content = `
+    const isLastQuestion = s.currentQuestion >= 4;
+    content = isLastQuestion ? `
+      <div class="student-wait-card final-wait-card">
+        <div class="student-wait-icon final-wait-icon">🏆</div>
+        <div class="final-wait-kicker">اكتمل التحدي</div>
+        <h2>انتهى السؤال الأخير</h2>
+        <p>استعدوا لإعلان النتيجة النهائية</p>
+        <div class="final-wait-pulse"><span></span><span></span><span></span></div>
+        <small>انتظروا إعلان المعلمة…</small>
+      </div>
+    ` : `
       <div class="student-wait-card">
         <div class="student-wait-icon">⏳</div>
         <h2>تم انتهاء السؤال</h2>
