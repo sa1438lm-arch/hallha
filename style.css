@@ -1403,27 +1403,58 @@ body {
 }
 .hero-panel {
   text-align:center;
-  padding:30px 20px 26px;
+  padding:22px 20px 28px;
 }
-.hero-icon { font-size:54px; filter:drop-shadow(0 10px 14px rgba(247,198,59,.25)); }
+.hero-icon {
+  font-size:54px;
+  line-height:1;
+  margin-bottom:18px;
+  filter:drop-shadow(0 10px 14px rgba(247,198,59,.25));
+}
 .hero-kicker,.setup-kicker,.entry-kicker,.student-state-kicker {
-  color:#7a62ca;
+  color:#765ec8;
   font-weight:800;
-  font-size:14px;
-  margin-top:4px;
+  font-size:15px;
+  margin-top:0;
+}
+.hero-panel .hero-kicker {
+  margin-bottom:14px;
+  letter-spacing:0;
 }
 .hero-panel h1 {
-  margin:4px 0 0;
+  margin:0;
+  padding:8px 0 10px;
   font:900 clamp(68px,10vw,118px) 'Tajawal',sans-serif;
-  line-height:.95;
+  line-height:1.08;
   background:linear-gradient(135deg,#5333bc,#a158dc 55%,#ef8ec5);
   -webkit-background-clip:text;
   -webkit-text-fill-color:transparent;
-  letter-spacing:-4px;
+  letter-spacing:-1.5px;
 }
-.hero-panel p { color:var(--ui-muted); font-size:clamp(17px,2vw,23px); margin:14px 0; }
-.hero-meta { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
-.hero-meta span { background:#fff; border:1px solid var(--ui-border); border-radius:999px; padding:8px 16px; color:#5c4d89; font-weight:700; box-shadow:0 7px 18px rgba(70,45,145,.06); }
+.hero-panel p {
+  color:#746b8e;
+  font-size:clamp(18px,2vw,24px);
+  font-weight:500;
+  line-height:1.75;
+  margin:18px 0 20px;
+}
+.hero-meta {
+  display:flex;
+  flex-direction:row;
+  direction:rtl;
+  justify-content:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.hero-meta span {
+  background:rgba(255,255,255,.96);
+  border:1px solid #ddd5f3;
+  border-radius:999px;
+  padding:9px 18px;
+  color:#5c4d89;
+  font-weight:800;
+  box-shadow:0 8px 20px rgba(70,45,145,.07);
+}
 .role-cards { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin:18px auto 0; max-width:850px; }
 .role-card {
   appearance:none;
@@ -1587,8 +1618,10 @@ body {
   .student-game-team { min-width:0; padding:7px 9px; }
   .student-game-team strong { font-size:12px; }
   .home-stage,.setup-stage,.student-entry-stage,.student-game-main { width:calc(100% - 20px); margin-top:18px; }
-  .hero-panel { padding-top:15px; }
-  .hero-panel h1 { font-size:72px; }
+  .hero-panel { padding-top:10px; }
+  .hero-icon { margin-bottom:14px; }
+  .hero-panel .hero-kicker { margin-bottom:10px; }
+  .hero-panel h1 { font-size:72px; line-height:1.12; padding:6px 0 8px; letter-spacing:-1px; }
   .role-card { min-height:180px; padding:22px 16px; border-radius:22px; }
   .setup-card,.student-entry-card { padding:20px 15px; border-radius:22px; }
   .premium-steps { flex-direction:row; }
