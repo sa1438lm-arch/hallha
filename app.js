@@ -143,6 +143,7 @@ function showError(text) {
 
 function isHost() { return role === 'host'; }
 
+// تستخدم اللعبة فقط ملفات MP3 الحقيقية الموجودة في مجلد audio على الخادم.
 function prepareTeacherAudio() {
   if (audioPrepared) return;
 
