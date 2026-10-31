@@ -233,61 +233,63 @@ function renderHome() {
   currentSession = null;
   stopLobbyAudio();
   app.innerHTML = `
-    <div class="digital-space">
-      <div class="grid-floor"></div>
-      <div class="glow glow-blue"></div>
-      <div class="glow glow-purple"></div>
-      <div class="glow glow-orange"></div>
-      <div class="particles">
-        <span style="--i:1;--x:12vw;--y:18vh;--s:1.4;">∫ f(x)dx</span>
-        <span style="--i:2;--x:78vw;--y:14vh;--s:1.2;">E=mc²</span>
-        <span style="--i:3;--x:48vw;--y:48vh;--s:1.8;">π ≈ 3.14</span>
-        <span style="--i:4;--x:22vw;--y:72vh;--s:1.1;">∑ n=1∞</span>
-        <span style="--i:5;--x:72vw;--y:78vh;--s:1.6;">√(x²+y²)</span>
-        <span style="--i:6;--x:38vw;--y:12vh;--s:1.3;">dx/dt</span>
-      </div>
-    </div>
-    <div class="container">
-      <div class="home-header">
-        <h1>حلّها</h1>
-        <div class="subtitle">تحدي حل المسائل</div>
-        <div class="lesson">اسم الدرس: خطة حل المسألة</div>
-        <div class="meta">٥ أسئلة • ٢٠ ثانية لكل سؤال</div>
-      </div>
-      <div class="cards">
-        <div class="card" onclick="startAsTeacher()">
-          <div class="card-icon">▶</div>
-          <h3>ابدأ كمعلم</h3>
-          <p>أنشئي الجلسة وابدئي التحدي مع الطالبات</p>
-        </div>
-        <div class="card" onclick="showJoin()">
-          <div class="card-icon">✦</div>
-          <h3>ابدأ كمجموعة</h3>
-          <p>انضمي إلى الجلسة باستخدام رمز الدخول</p>
-        </div>
-      </div>
-    </div>
-  `;
+    <div class="edu-page home-page">
+      <div class="edu-decor decor-stars">✦ ✧ ✦</div>
+      <header class="public-brandbar">
+        <div class="brand-school">🏫 <span>ابتدائية الأبناء الثانية بالبحرية</span></div>
+        <div class="brand-center"><span>الرياضيات</span><strong>خطة حل المسألة</strong></div>
+        <div class="brand-game">✨ حلّها</div>
+      </header>
+      <main class="home-stage">
+        <section class="hero-panel">
+          <div class="hero-icon">💡</div>
+          <div class="hero-kicker">تحدي تعليمي تفاعلي</div>
+          <h1>حلّها</h1>
+          <p>تحدي حل المسائل بطريقة ممتعة وتعاونية</p>
+          <div class="hero-meta"><span>٥ أسئلة</span><span>٢٠ ثانية لكل سؤال</span><span>Realtime</span></div>
+        </section>
+        <section class="role-cards">
+          <button class="role-card teacher-role" onclick="startAsTeacher()">
+            <span class="role-icon">👩🏻‍🏫</span>
+            <strong>دخول المعلمة</strong>
+            <small>إنشاء الجلسة وإدارة التحدي</small>
+            <b>ابدئي الآن ←</b>
+          </button>
+          <button class="role-card student-role" onclick="showJoin()">
+            <span class="role-icon">👭</span>
+            <strong>دخول الطالبات</strong>
+            <small>الانضمام برمز الجلسة واختيار المجموعة</small>
+            <b>انضمي الآن ←</b>
+          </button>
+        </section>
+      </main>
+      <footer class="edu-footer">المعلمة: سلمى العسيري • الرياضيات</footer>
+    </div>`;
 }
 
 function startAsTeacher() {
   currentView = 'host-setup';
   app.innerHTML = `
-    <div class="screen">
-      <div class="screen-inner" style="max-width:480px; text-align:center;">
-        <button class="back-btn" onclick="renderHome()">← العودة</button>
-        <h2>إعداد الجلسة</h2>
-        <p style="margin:16px 0 24px; color:#6B6580;">حددي عدد المجموعات المشاركة</p>
-        <div class="counter" style="justify-content:center; margin:20px 0;">
-          <button onclick="changeMax(-1)">−</button>
-          <span id="max-groups">${maxGroups}</span>
-          <button onclick="changeMax(1)">+</button>
-        </div>
-        <p style="color:#999; font-size:14px;">من ٢ إلى ٥ مجموعات</p>
-        <button class="btn btn-gold" style="width:100%; margin-top:32px;" onclick="createAndOpen()">إنشاء الجلسة</button>
-      </div>
-    </div>
-  `;
+    <div class="edu-page setup-page">
+      ${teacherHeaderHTML()}
+      <main class="setup-stage">
+        <section class="setup-card">
+          <button class="back-btn styled-back" onclick="renderHome()">← العودة</button>
+          <div class="setup-illustration">👥</div>
+          <div class="setup-kicker">إعداد التحدي</div>
+          <h2>كم مجموعة ستشارك اليوم؟</h2>
+          <p>حددي عدد المجموعات ثم أنشئي الجلسة ليظهر رمز الانضمام للطالبات.</p>
+          <div class="counter premium-counter">
+            <button onclick="changeMax(-1)" aria-label="تقليل عدد المجموعات">−</button>
+            <div><strong id="max-groups">${maxGroups}</strong><span>مجموعات</span></div>
+            <button onclick="changeMax(1)" aria-label="زيادة عدد المجموعات">+</button>
+          </div>
+          <div class="setup-range">من ٢ إلى ٥ مجموعات</div>
+          <button class="btn btn-gold teacher-primary-action" onclick="createAndOpen()">✨ إنشاء الجلسة</button>
+        </section>
+      </main>
+    </div>`;
+  startTeacherClock();
 }
 
 function changeMax(d) {
@@ -330,45 +332,50 @@ function renderJoin() {
   const teamNameValue = pendingTeamName || '';
 
   app.innerHTML = `
-    <div class="screen">
-      <div class="screen-inner join-screen">
-        <button class="back-btn" onclick="${isNameStep ? 'backToJoinCodeStep()' : 'renderHome()'}">← ${isNameStep ? 'تغيير الرمز' : 'العودة'}</button>
+    <div class="edu-page student-entry-page">
+      <header class="student-brandbar">
+        <div class="student-brand-school">🏫 ابتدائية الأبناء الثانية بالبحرية</div>
+        <div class="student-brand-lesson"><span>الرياضيات</span><strong>خطة حل المسألة</strong></div>
+        <div class="student-brand-logo">✨ حلّها</div>
+      </header>
+      <main class="student-entry-stage">
+        <section class="student-entry-card">
+          <button class="back-btn styled-back" onclick="${isNameStep ? 'backToJoinCodeStep()' : 'renderHome()'}">← ${isNameStep ? 'تغيير الرمز' : 'العودة'}</button>
+          <div class="entry-icon">${isNameStep ? '👭' : '🔐'}</div>
+          <div class="entry-kicker">${isNameStep ? 'الخطوة الثانية' : 'الخطوة الأولى'}</div>
+          <h2>${isNameStep ? 'اختاري اسم المجموعة' : 'انضمي إلى التحدي'}</h2>
+          <p>${isNameStep ? 'اختاري اسمًا مميزًا لمجموعتك ثم أكملي الانضمام.' : 'أدخلي رمز الجلسة المكوّن من ٦ أرقام.'}</p>
 
-        <div class="join-header">
-          <h2>انضمي إلى التحدي</h2>
-          <p>${isNameStep ? 'اختاري اسم المجموعة ثم أكملي الانضمام.' : 'أدخلي رمز الجلسة أولًا، ثم اختاري اسم المجموعة.'}</p>
-        </div>
-
-        <div class="join-progress">
-          <div class="join-step-item ${!isNameStep ? 'active' : 'done'}"><span>١</span><strong>دخول الجلسة</strong></div>
-          <div class="join-step-line"></div>
-          <div class="join-step-item ${isNameStep ? 'active' : ''}"><span>٢</span><strong>اسم المجموعة</strong></div>
-        </div>
-
-        ${!isNameStep ? `
-          <div class="join-card">
-            <label>رمز الجلسة</label>
-            <input type="text" id="join-code" maxlength="6" value="${codeValue}" placeholder="٦ أرقام" inputmode="numeric" autocomplete="off">
-            <div class="helper-text">بعد الضغط على «دخول» ستنتقلين لاختيار اسم المجموعة.</div>
-            <button class="btn btn-primary join-main-btn" onclick="checkCode()">دخول</button>
+          <div class="join-progress premium-steps">
+            <div class="join-step-item ${!isNameStep ? 'active' : 'done'}"><span>١</span><strong>رمز الجلسة</strong></div>
+            <div class="join-step-line"></div>
+            <div class="join-step-item ${isNameStep ? 'active' : ''}"><span>٢</span><strong>اسم المجموعة</strong></div>
           </div>
-        ` : `
-          <div class="join-card">
-            <div class="code-summary">رمز الجلسة: <strong>${codeValue}</strong></div>
-            <label>اسم المجموعة</label>
-            <input type="text" id="team-name" maxlength="30" value="${teamNameValue}" placeholder="اكتبي اسم المجموعة" oninput="pendingTeamName=this.value">
-            <div class="suggestions">
-              ${SUGGESTED_NAMES.map(n => `<button class="suggestion" onclick="setSuggestedName('${n}')">${n}</button>`).join('')}
+
+          ${!isNameStep ? `
+            <div class="join-card premium-join-card">
+              <label>رمز الجلسة</label>
+              <input class="code-input" type="text" id="join-code" maxlength="6" value="${codeValue}" placeholder="مثال: ١٢٣٤٥٦" inputmode="numeric" autocomplete="off">
+              <div class="helper-text">سيتم التحقق من الرمز عند الانضمام النهائي.</div>
+              <button class="btn btn-primary join-main-btn" onclick="checkCode()">دخول إلى الجلسة</button>
             </div>
-            <div class="join-actions">
-              <button class="btn btn-light" onclick="backToJoinCodeStep()">رجوع</button>
-              <button class="btn btn-gold join-main-btn" onclick="joinTeam()">انضمام</button>
+          ` : `
+            <div class="join-card premium-join-card">
+              <div class="code-summary">🔑 رمز الجلسة <strong>${codeValue}</strong></div>
+              <label>اسم المجموعة</label>
+              <input type="text" id="team-name" maxlength="30" value="${teamNameValue}" placeholder="اكتبي اسم المجموعة" oninput="pendingTeamName=this.value">
+              <div class="suggestions premium-suggestions">
+                ${SUGGESTED_NAMES.map(n => `<button class="suggestion" onclick="setSuggestedName('${n}')">${n}</button>`).join('')}
+              </div>
+              <div class="join-actions">
+                <button class="btn btn-light" onclick="backToJoinCodeStep()">رجوع</button>
+                <button class="btn btn-gold join-main-btn" onclick="joinTeam()">✨ انضمام</button>
+              </div>
             </div>
-          </div>
-        `}
-      </div>
-    </div>
-  `;
+          `}
+        </section>
+      </main>
+    </div>`;
 }
 
 function backToJoinCodeStep() {
@@ -645,99 +652,121 @@ function startChallenge() {
 }
 function goNext() { send({ type: 'next_question' }); }
 
+function studentGameHeaderHTML(s) {
+  const me = (s.teams || []).find(t => t.id === teamId);
+  return `
+    <header class="student-game-header">
+      <div class="student-game-school">🏫 <span>ابتدائية الأبناء الثانية بالبحرية</span></div>
+      <div class="student-game-lesson"><span>الرياضيات</span><strong>خطة حل المسألة</strong></div>
+      <div class="student-game-team"><small>المجموعة</small><strong>${me?.symbol || '★'} ${me?.name || '—'}</strong></div>
+    </header>`;
+}
+
+function studentShell(content, s, extraClass = '') {
+  return `<div class="student-game-page ${extraClass}">${studentGameHeaderHTML(s)}<main class="student-game-main">${content}</main></div>`;
+}
+
 function renderTeam() {
   if (!currentSession) return;
   const s = currentSession;
   const joinedNow = showJoinedSuccess;
   showJoinedSuccess = false;
   let content = '';
+
   if (s.state === 'waiting') {
+    const me = (s.teams || []).find(t => t.id === teamId);
     content = `
-      ${joinedNow ? '<div id="join-success" class="join-success">✓ تم الانضمام إلى التحدي بنجاح</div>' : ''}
-      <h2 style="text-align:center;">في انتظار بدء التحدي</h2>
-      <div class="lobby-code" style="font-size:48px;">${s.code}</div>
-      <div class="teams-list">
-        ${s.teams.map(t => `<div class="team-item ${t.id === teamId ? 'connected' : ''}"><span class="symbol">${t.symbol}</span><span>${t.name}</span>${t.id === teamId ? '<span>✓ أنتِ</span>' : ''}</div>`).join('')}
-      </div>
-    `;
+      ${joinedNow ? '<div id="join-success" class="join-success premium-success">✓ تم الانضمام إلى التحدي بنجاح</div>' : ''}
+      <section class="student-lobby-card">
+        <div class="student-state-icon">✨</div>
+        <div class="student-state-kicker">تم الانضمام بنجاح</div>
+        <h2>في انتظار بدء التحدي</h2>
+        <p>استعدوا يا <strong>${me?.name || 'بطلات'}</strong>، ستظهر الأسئلة هنا فور أن تبدأ المعلمة.</p>
+        <div class="student-session-code"><span>رمز الجلسة</span><strong>${s.code}</strong></div>
+        <div class="student-connected-badge">● متصلة لحظيًا بالتحدي</div>
+        <div class="student-mini-teams">
+          ${(s.teams || []).map(t => `<span class="${t.id===teamId?'mine':''}">${t.symbol} ${t.name}</span>`).join('')}
+        </div>
+      </section>`;
   } else if (s.state === 'question_active') {
     const q = s.question || {};
     content = `
-      <div class="question-header"><div>السؤال ${q.index || (s.currentQuestion+1)} من ٥</div><div class="timer" id="timer">${QUESTION_DURATION_SEC}</div></div>
-      <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
-      <div class="category">${q.category || ''}</div>
-      <div class="question-text">${q.text || 'جاري تحميل السؤال...'}</div>
-      <div class="options" id="options">
-        ${(q.options || []).map((opt, i) => `<div class="option" data-index="${i}" onclick="selectOption(this, ${i})">${opt}</div>`).join('')}
-      </div>
-      <div id="answer-status" style="text-align:center; margin-top:16px; font-weight:700; color:#4C3A78;"></div>
-    `;
+      <section class="student-question-card">
+        <div class="student-question-topline">
+          <div class="student-question-number">📖 السؤال ${toArabicDigits(q.index || (s.currentQuestion+1))} من ${toArabicDigits(q.total || 5)}</div>
+          <div class="student-category-pill">${q.category || '📘 الرياضيات'}</div>
+          <div class="student-timer-ring"><span id="timer">${toArabicDigits(QUESTION_DURATION_SEC)}</span><small>ثانية</small></div>
+        </div>
+        <div class="student-time-progress"><div class="progress-fill" id="progress"></div></div>
+        <div class="student-question-text">${q.text || 'جاري تحميل السؤال...'}</div>
+        <div class="student-options-grid" id="options">
+          ${(q.options || []).map((opt, i) => `<button class="student-option" data-index="${i}" onclick="selectOption(this, ${i})"><span class="option-letter">${['أ','ب','ج','د'][i] || toArabicDigits(i+1)}</span><span>${opt}</span></button>`).join('')}
+        </div>
+        <div id="answer-status" class="student-answer-status">اختاري إجابتك ثم انتظري بقية المجموعات 🌟</div>
+      </section>`;
     startTimer(s.questionStartTime);
   } else if (s.state === 'question_reveal' || s.state === 'leaderboard') {
     const isLastQuestion = s.currentQuestion >= 4;
     content = isLastQuestion ? `
-      <div class="student-wait-card final-wait-card">
+      <section class="student-wait-card premium-wait final-wait-card">
         <div class="student-wait-icon final-wait-icon">🏆</div>
         <div class="final-wait-kicker">اكتمل التحدي</div>
         <h2>انتهى السؤال الأخير</h2>
         <p>استعدوا لإعلان النتيجة النهائية</p>
         <div class="final-wait-pulse"><span></span><span></span><span></span></div>
         <small>انتظروا إعلان المعلمة…</small>
-      </div>
-    ` : `
-      <div class="student-wait-card">
+      </section>` : `
+      <section class="student-wait-card premium-wait">
         <div class="student-wait-icon">⏳</div>
+        <div class="student-state-kicker">أحسنتم</div>
         <h2>تم انتهاء السؤال</h2>
-        <p>انتظري انتقال المعلمة إلى السؤال التالي.</p>
-      </div>
-    `;
+        <p>انتظروا انتقال المعلمة إلى السؤال التالي.</p>
+        <div class="wait-decoration">✦  ✧  ✦</div>
+      </section>`;
   } else if (s.state === 'final_reveal') {
     content = `
-      <div class="student-wait-card final-announcement-wait">
+      <section class="student-wait-card premium-wait final-announcement-wait">
         <div class="student-wait-icon final-wait-icon">🏆</div>
         <div class="final-wait-kicker">لحظات الحسم</div>
         <h2>جارٍ إعلان المراكز النهائية</h2>
         <p>استعدوا لمعرفة المجموعة الفائزة…</p>
         <div class="final-wait-pulse"><span></span><span></span><span></span></div>
-      </div>
-    `;
+      </section>`;
   } else if (s.state === 'finished') {
     const summary = s.finalSummary || {};
     const winner = summary.winner || {};
+    const me = (s.teams || []).find(t => t.id === teamId);
+    const isWinner = winner.id && winner.id === teamId;
     content = `
-      <div class="student-final-celebration">
-        <div class="celebration-stars" aria-hidden="true">✦ ✧ ✦</div>
+      <section class="student-final-celebration premium-final ${isWinner ? 'you-won' : ''}">
+        <div class="celebration-stars" aria-hidden="true">✦ ✧ ✦ ✧ ✦</div>
         <div class="winner-cup" aria-hidden="true">🏆</div>
         <div class="final-kicker">النتيجة النهائية</div>
-        <h2>مبروك للمجموعة الفائزة!</h2>
+        <h2>${isWinner ? 'مبروك! مجموعتكم هي الفائزة 🎉' : 'مبروك للمجموعة الفائزة!'}</h2>
         <div class="student-winner-card">
           <div class="winner-symbol">${winner.symbol || '★'}</div>
           <div class="winner-name">${winner.name || 'المجموعة الفائزة'}</div>
-          <div class="winner-score">${winner.score ?? 0} نقطة</div>
+          <div class="winner-score">${toArabicDigits(winner.score ?? 0)} نقطة</div>
         </div>
         <div class="student-final-stats">
-          <div><strong>${summary.totalCorrect ?? 0}</strong><span>إجابة صحيحة</span></div>
-          <div><strong>${summary.accuracy ?? 0}٪</strong><span>دقة الفصل</span></div>
+          <div><strong>${toArabicDigits(summary.totalCorrect ?? 0)}</strong><span>إجابة صحيحة</span></div>
+          <div><strong>${toArabicDigits(summary.accuracy ?? 0)}٪</strong><span>دقة الفصل</span></div>
         </div>
-        <p class="celebration-note">أحسنتن جميعًا 🌟</p>
-      </div>
-    `;
+        <p class="celebration-note">${isWinner ? 'بطلات حلّها لهذا التحدي 🌟' : `أحسنتم يا ${me?.name || 'بطلات'}، مشاركة رائعة 🌟`}</p>
+      </section>`;
     createConfetti();
   } else {
-    // لا نترك شاشة أي مجموعة فارغة حتى لو وصلت حالة غير متوقعة أثناء إعادة المزامنة.
     content = `
-      <div class="student-wait-card">
-        <div class="student-wait-icon">⏳</div>
+      <section class="student-wait-card premium-wait">
+        <div class="student-wait-icon">🔄</div>
         <h2>جارٍ مزامنة التحدي</h2>
         <p>سيتم تحديث الشاشة تلقائيًا خلال لحظات.</p>
-      </div>
-    `;
+      </section>`;
     requestCurrentState();
   }
-  app.innerHTML = `<div class="screen"><div class="screen-inner">${content}</div></div>`;
-  if (joinedNow) {
-    setTimeout(() => document.getElementById('join-success')?.remove(), 3500);
-  }
+
+  app.innerHTML = studentShell(content, s, `state-${s.state}`);
+  if (joinedNow) setTimeout(() => document.getElementById('join-success')?.remove(), 3500);
 }
 
 function requestCurrentState() {
@@ -747,14 +776,17 @@ function requestCurrentState() {
 
 function selectOption(el, index) {
   if (el.parentElement.classList.contains('locked')) return;
-  document.querySelectorAll('.option').forEach(o => {
+  document.querySelectorAll('.option, .student-option').forEach(o => {
     o.classList.remove('selected');
     o.style.pointerEvents = 'none';
   });
   el.classList.add('selected');
   el.parentElement.classList.add('locked');
   const status = document.getElementById('answer-status');
-  if (status) status.textContent = '✓ تم اعتماد إجابتك ولا يمكن تغييرها';
+  if (status) {
+    status.textContent = '✓ تم اعتماد إجابتكم — انتظروا بقية المجموعات';
+    status.classList.add('answered');
+  }
   send({ type: 'answer', option: index });
 }
 
