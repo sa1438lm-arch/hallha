@@ -143,123 +143,70 @@ function showError(text) {
 
 function isHost() { return role === 'host'; }
 
-// تستخدم اللعبة فقط ملفات MP3 الحقيقية الموجودة في مجلد audio على الخادم.
+// تشغيل مباشر لملفات الصوت الحقيقية الموجودة في مجلد audio فقط.
+// لا Web Audio ولا ملفات بديلة، مع كسر الكاش عند كل تشغيل.
+function audioUrl(name) {
+  return `/audio/${name}.mp3?v=${Date.now()}`;
+}
+
 function prepareTeacherAudio() {
   if (audioPrepared) return;
-
-  const version = '20261031a';
-  lobbyAudio = new Audio(`./audio/lobby.mp3?v=${version}`);
-  startAudio = new Audio(`./audio/start.mp3?v=${version}`);
-  winnerAudio = new Audio(`./audio/winner.mp3?v=${version}`);
+  lobbyAudio = new Audio();
+  startAudio = new Audio();
+  winnerAudio = new Audio();
 
   [lobbyAudio, startAudio, winnerAudio].forEach(a => {
-    a.preload = 'auto';
+    a.preload = 'none';
     a.playsInline = true;
   });
   lobbyAudio.loop = true;
-  lobbyAudio.volume = 0.18;
-  startAudio.volume = 0.9;
+  lobbyAudio.volume = 0.28;
+  startAudio.volume = 1;
   winnerAudio.volume = 1;
-
   audioPrepared = true;
-}
-
-async function loadAudioBuffer(name, url) {
-  if (!audioContext || audioBuffers[name]) return audioBuffers[name] || null;
-  const response = await fetch(url, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
-  const bytes = await response.arrayBuffer();
-  audioBuffers[name] = await audioContext.decodeAudioData(bytes.slice(0));
-  return audioBuffers[name];
-}
-
-async function unlockHtmlAudioElement(audio) {
-  if (!audio) return false;
-  const oldVolume = audio.volume;
-  const oldMuted = audio.muted;
-  try {
-    audio.muted = true;
-    audio.volume = 0;
-    audio.currentTime = 0;
-    await audio.play();
-    audio.pause();
-    audio.currentTime = 0;
-    audio.muted = oldMuted;
-    audio.volume = oldVolume;
-    return true;
-  } catch (err) {
-    audio.muted = oldMuted;
-    audio.volume = oldVolume;
-    console.warn('تعذر فتح صلاحية عنصر الصوت:', err);
-    return false;
-  }
 }
 
 async function unlockTeacherAudio() {
   if (!isHost() && currentView !== 'host-setup') return false;
   prepareTeacherAudio();
   audioUnlockAttempted = true;
-
-  let htmlUnlocked = false;
-  try {
-    const results = await Promise.all([
-      unlockHtmlAudioElement(lobbyAudio),
-      unlockHtmlAudioElement(startAudio),
-      unlockHtmlAudioElement(winnerAudio)
-    ]);
-    htmlUnlocked = results.some(Boolean);
-  } catch {}
-
+  // إنشاء AudioContext صامت فقط لفك حظر الصوت في Chrome ضمن نقرة المستخدم.
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (AudioCtx) {
       if (!audioContext) audioContext = new AudioCtx();
       if (audioContext.state === 'suspended') await audioContext.resume();
-      audioUnlocked = audioContext.state === 'running' || htmlUnlocked;
-      const version = '20261031a';
-      Promise.allSettled([
-        loadAudioBuffer('lobby', `./audio/lobby.mp3?v=${version}`),
-        loadAudioBuffer('start', `./audio/start.mp3?v=${version}`),
-        loadAudioBuffer('winner', `./audio/winner.mp3?v=${version}`)
-      ]);
-    } else {
-      audioUnlocked = htmlUnlocked;
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      osc.start();
+      osc.stop(audioContext.currentTime + 0.01);
+      audioUnlocked = true;
+      return true;
     }
   } catch (err) {
-    console.warn('تعذر تهيئة Web Audio:', err);
-    audioUnlocked = htmlUnlocked;
+    console.warn('تعذر فتح صلاحية الصوت:', err);
   }
-
-  return audioUnlocked;
+  audioUnlocked = true;
+  return true;
 }
 
-function playBuffer(name, { loop = false, volume = 1 } = {}) {
-  if (!audioContext || !audioBuffers[name]) return null;
+async function playFile(audio, name, { loop = false, volume = 1 } = {}) {
+  if (!audio || !soundEnabled) return false;
   try {
-    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
-    const source = audioContext.createBufferSource();
-    const gain = audioContext.createGain();
-    source.buffer = audioBuffers[name];
-    source.loop = loop;
-    gain.gain.value = volume;
-    source.connect(gain);
-    gain.connect(audioContext.destination);
-    source.start(0);
-    return source;
-  } catch (err) {
-    console.warn(`تعذر تشغيل WebAudio ${name}:`, err);
-    return null;
-  }
-}
-
-async function playHtmlAudio(audio, { reset = true } = {}) {
-  if (!audio) return false;
-  try {
-    if (reset) audio.currentTime = 0;
+    audio.pause();
+    audio.loop = loop;
+    audio.volume = volume;
+    audio.src = audioUrl(name);
+    audio.load();
     await audio.play();
+    console.log(`تشغيل الصوت: ${name}.mp3`, audio.src);
     return true;
   } catch (err) {
-    console.warn('تعذر تشغيل HTMLAudio:', err);
+    console.error(`فشل تشغيل ${name}.mp3`, err);
+    showError(`تعذر تشغيل ملف ${name}.mp3`);
     return false;
   }
 }
@@ -267,42 +214,27 @@ async function playHtmlAudio(audio, { reset = true } = {}) {
 async function startLobbyAudio() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
-  if (lobbySource || (lobbyAudio && !lobbyAudio.paused)) return;
-
-  if (audioBuffers.lobby) {
-    const source = playBuffer('lobby', { loop: true, volume: 0.18 });
-    if (source) {
-      lobbySource = source;
-      source.onended = () => { if (lobbySource === source) lobbySource = null; };
-      return;
-    }
-  }
-  await playHtmlAudio(lobbyAudio);
+  if (lobbyAudio && !lobbyAudio.paused && lobbyAudio.src) return;
+  await playFile(lobbyAudio, 'lobby', { loop: true, volume: 0.28 });
 }
 
 function stopLobbyAudio() {
-  if (lobbySource) {
-    try { lobbySource.stop(); } catch {}
-    lobbySource = null;
-  }
-  if (lobbyAudio) {
-    lobbyAudio.pause();
-    try { lobbyAudio.currentTime = 0; } catch {}
-  }
+  if (!lobbyAudio) return;
+  lobbyAudio.pause();
+  lobbyAudio.removeAttribute('src');
+  try { lobbyAudio.load(); } catch {}
 }
 
 async function playStart() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
-  if (audioBuffers.start && playBuffer('start', { volume: 0.9 })) return;
-  await playHtmlAudio(startAudio);
+  await playFile(startAudio, 'start', { volume: 1 });
 }
 
 async function playWinner() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
-  if (audioBuffers.winner && playBuffer('winner', { volume: 1 })) return;
-  await playHtmlAudio(winnerAudio);
+  await playFile(winnerAudio, 'winner', { volume: 1 });
 }
 
 async function testTeacherSound() {
@@ -311,8 +243,7 @@ async function testTeacherSound() {
   localStorage.setItem('soundEnabled', 'true');
   await unlockTeacherAudio();
   prepareTeacherAudio();
-  const ok = await playHtmlAudio(startAudio);
-  if (!ok && audioBuffers.start) playBuffer('start', { volume: 0.9 });
+  await playFile(startAudio, 'start', { volume: 1 });
   renderSoundToggle();
 }
 
@@ -323,10 +254,8 @@ async function toggleSound() {
     stopLobbyAudio();
   } else {
     await unlockTeacherAudio();
-    // اختبار قصير مباشر عند تشغيل الصوت حتى تعرف المعلمة أن الإذن نجح.
-    await playHtmlAudio(startAudio);
     if (currentSession?.state === 'waiting' && isHost()) {
-      setTimeout(() => startLobbyAudio(), 850);
+      await startLobbyAudio();
     }
   }
   renderSoundToggle();
