@@ -14,6 +14,7 @@ let audioContext = null;
 let audioBuffers = {};
 let lobbySource = null;
 let audioUnlocked = false;
+let audioUnlockAttempted = false;
 let winnerSoundPlayed = false;
 let timerInterval = null;
 let teacherClockInterval = null;
@@ -145,18 +146,19 @@ function isHost() { return role === 'host'; }
 function prepareTeacherAudio() {
   if (audioPrepared) return;
 
-  // HTMLAudio fallback فقط. المحرك الأساسي بالأسفل هو Web Audio API.
-  lobbyAudio = new Audio('./audio/lobby.mp3');
-  startAudio = new Audio('./audio/start.mp3');
-  winnerAudio = new Audio('./audio/winner.mp3');
+  const version = '20261031a';
+  lobbyAudio = new Audio(`./audio/lobby.mp3?v=${version}`);
+  startAudio = new Audio(`./audio/start.mp3?v=${version}`);
+  winnerAudio = new Audio(`./audio/winner.mp3?v=${version}`);
 
-  lobbyAudio.preload = 'none';
-  startAudio.preload = 'none';
-  winnerAudio.preload = 'none';
+  [lobbyAudio, startAudio, winnerAudio].forEach(a => {
+    a.preload = 'auto';
+    a.playsInline = true;
+  });
   lobbyAudio.loop = true;
   lobbyAudio.volume = 0.18;
-  startAudio.volume = 0.8;
-  winnerAudio.volume = 0.9;
+  startAudio.volume = 0.9;
+  winnerAudio.volume = 1;
 
   audioPrepared = true;
 }
@@ -170,63 +172,111 @@ async function loadAudioBuffer(name, url) {
   return audioBuffers[name];
 }
 
+async function unlockHtmlAudioElement(audio) {
+  if (!audio) return false;
+  const oldVolume = audio.volume;
+  const oldMuted = audio.muted;
+  try {
+    audio.muted = true;
+    audio.volume = 0;
+    audio.currentTime = 0;
+    await audio.play();
+    audio.pause();
+    audio.currentTime = 0;
+    audio.muted = oldMuted;
+    audio.volume = oldVolume;
+    return true;
+  } catch (err) {
+    audio.muted = oldMuted;
+    audio.volume = oldVolume;
+    console.warn('تعذر فتح صلاحية عنصر الصوت:', err);
+    return false;
+  }
+}
+
 async function unlockTeacherAudio() {
-  if (!isHost() && currentView !== 'host-setup') return;
+  if (!isHost() && currentView !== 'host-setup') return false;
   prepareTeacherAudio();
+  audioUnlockAttempted = true;
+
+  let htmlUnlocked = false;
+  try {
+    const results = await Promise.all([
+      unlockHtmlAudioElement(lobbyAudio),
+      unlockHtmlAudioElement(startAudio),
+      unlockHtmlAudioElement(winnerAudio)
+    ]);
+    htmlUnlocked = results.some(Boolean);
+  } catch {}
 
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) throw new Error('Web Audio API غير مدعوم');
-
-    if (!audioContext) audioContext = new AudioCtx();
-    if (audioContext.state === 'suspended') await audioContext.resume();
-
-    // يتم استدعاء هذه الدالة من نقرة المعلمة، لذلك تصبح الجلسة الصوتية مصرحًا بها.
-    audioUnlocked = true;
-
-    // تحميل الملفات كـ ArrayBuffer يمنع مشاكل Range/416 التي قد تحدث مع HTMLAudio على بعض الاستضافات.
-    await Promise.allSettled([
-      loadAudioBuffer('lobby', './audio/lobby.mp3'),
-      loadAudioBuffer('start', './audio/start.mp3'),
-      loadAudioBuffer('winner', './audio/winner.mp3')
-    ]);
+    if (AudioCtx) {
+      if (!audioContext) audioContext = new AudioCtx();
+      if (audioContext.state === 'suspended') await audioContext.resume();
+      audioUnlocked = audioContext.state === 'running' || htmlUnlocked;
+      const version = '20261031a';
+      Promise.allSettled([
+        loadAudioBuffer('lobby', `./audio/lobby.mp3?v=${version}`),
+        loadAudioBuffer('start', `./audio/start.mp3?v=${version}`),
+        loadAudioBuffer('winner', `./audio/winner.mp3?v=${version}`)
+      ]);
+    } else {
+      audioUnlocked = htmlUnlocked;
+    }
   } catch (err) {
-    console.warn('تعذر تهيئة Web Audio، سيتم استخدام HTMLAudio كخيار احتياطي:', err);
+    console.warn('تعذر تهيئة Web Audio:', err);
+    audioUnlocked = htmlUnlocked;
   }
+
+  return audioUnlocked;
 }
 
 function playBuffer(name, { loop = false, volume = 1 } = {}) {
-  if (!audioContext || !audioUnlocked || !audioBuffers[name]) return null;
-  if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
-
-  const source = audioContext.createBufferSource();
-  const gain = audioContext.createGain();
-  source.buffer = audioBuffers[name];
-  source.loop = loop;
-  gain.gain.value = volume;
-  source.connect(gain);
-  gain.connect(audioContext.destination);
-  source.start(0);
-  return source;
+  if (!audioContext || !audioBuffers[name]) return null;
+  try {
+    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+    const source = audioContext.createBufferSource();
+    const gain = audioContext.createGain();
+    source.buffer = audioBuffers[name];
+    source.loop = loop;
+    gain.gain.value = volume;
+    source.connect(gain);
+    gain.connect(audioContext.destination);
+    source.start(0);
+    return source;
+  } catch (err) {
+    console.warn(`تعذر تشغيل WebAudio ${name}:`, err);
+    return null;
+  }
 }
 
-function startLobbyAudio() {
+async function playHtmlAudio(audio, { reset = true } = {}) {
+  if (!audio) return false;
+  try {
+    if (reset) audio.currentTime = 0;
+    await audio.play();
+    return true;
+  } catch (err) {
+    console.warn('تعذر تشغيل HTMLAudio:', err);
+    return false;
+  }
+}
+
+async function startLobbyAudio() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
+  if (lobbySource || (lobbyAudio && !lobbyAudio.paused)) return;
 
-  if (lobbySource) return;
-  const source = playBuffer('lobby', { loop: true, volume: 0.18 });
-  if (source) {
-    lobbySource = source;
-    source.onended = () => { if (lobbySource === source) lobbySource = null; };
-    return;
+  if (audioBuffers.lobby) {
+    const source = playBuffer('lobby', { loop: true, volume: 0.18 });
+    if (source) {
+      lobbySource = source;
+      source.onended = () => { if (lobbySource === source) lobbySource = null; };
+      return;
+    }
   }
-
-  // fallback إذا لم يكتمل تحميل Web Audio بعد.
-  if (lobbyAudio) {
-    lobbyAudio.currentTime = 0;
-    lobbyAudio.play().catch((err) => console.warn('تعذر تشغيل lobby.mp3:', err));
-  }
+  await playHtmlAudio(lobbyAudio);
 }
 
 function stopLobbyAudio() {
@@ -240,45 +290,62 @@ function stopLobbyAudio() {
   }
 }
 
-function playStart() {
+async function playStart() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
-  const source = playBuffer('start', { volume: 0.8 });
-  if (source) return;
-  if (startAudio) {
-    startAudio.currentTime = 0;
-    startAudio.play().catch((err) => console.warn('تعذر تشغيل start.mp3:', err));
-  }
+  if (audioBuffers.start && playBuffer('start', { volume: 0.9 })) return;
+  await playHtmlAudio(startAudio);
 }
 
-function playWinner() {
+async function playWinner() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
-  const source = playBuffer('winner', { volume: 0.9 });
-  if (source) return;
-  if (winnerAudio) {
-    winnerAudio.currentTime = 0;
-    winnerAudio.play().catch((err) => console.warn('تعذر تشغيل winner.mp3:', err));
-  }
+  if (audioBuffers.winner && playBuffer('winner', { volume: 1 })) return;
+  await playHtmlAudio(winnerAudio);
 }
 
-function toggleSound() {
-  soundEnabled = !soundEnabled;
-  localStorage.setItem('soundEnabled', soundEnabled);
-  if (!soundEnabled) stopLobbyAudio();
-  else if (currentSession?.state === 'waiting' && isHost()) startLobbyAudio();
+async function testTeacherSound() {
+  if (!isHost() && currentView !== 'host-setup') return;
+  soundEnabled = true;
+  localStorage.setItem('soundEnabled', 'true');
+  await unlockTeacherAudio();
+  prepareTeacherAudio();
+  const ok = await playHtmlAudio(startAudio);
+  if (!ok && audioBuffers.start) playBuffer('start', { volume: 0.9 });
   renderSoundToggle();
 }
-function renderSoundToggle() {
-  let btn = document.querySelector('.sound-toggle');
-  if (!btn) {
-    btn = document.createElement('button');
-    btn.className = 'sound-toggle';
-    btn.onclick = toggleSound;
-    document.body.appendChild(btn);
+
+async function toggleSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem('soundEnabled', soundEnabled);
+  if (!soundEnabled) {
+    stopLobbyAudio();
+  } else {
+    await unlockTeacherAudio();
+    // اختبار قصير مباشر عند تشغيل الصوت حتى تعرف المعلمة أن الإذن نجح.
+    await playHtmlAudio(startAudio);
+    if (currentSession?.state === 'waiting' && isHost()) {
+      setTimeout(() => startLobbyAudio(), 850);
+    }
   }
+  renderSoundToggle();
+}
+
+function renderSoundToggle() {
+  let wrap = document.querySelector('.sound-control-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'sound-control-wrap';
+    wrap.innerHTML = `
+      <button class="sound-toggle" type="button"></button>
+      <button class="sound-test" type="button" title="اختبار الصوت">اختبار</button>`;
+    document.body.appendChild(wrap);
+    wrap.querySelector('.sound-toggle').onclick = toggleSound;
+    wrap.querySelector('.sound-test').onclick = testTeacherSound;
+  }
+  const btn = wrap.querySelector('.sound-toggle');
   btn.textContent = soundEnabled ? '🔊 الصوت' : '🔇 الصوت';
-  btn.style.display = isHost() ? 'block' : 'none';
+  wrap.style.display = isHost() || currentView === 'host-setup' ? 'flex' : 'none';
 }
 
 function render() {
@@ -362,8 +429,9 @@ function changeMax(d) {
   if (el) el.textContent = maxGroups;
 }
 
-async function createAndOpen() {
-  await unlockTeacherAudio();
+function createAndOpen() {
+  unlockTeacherAudio();
+  if (soundEnabled) setTimeout(() => startLobbyAudio(), 120);
   connectWS();
   const trySend = () => {
     if (ws && ws.readyState === WebSocket.OPEN) send({ type: 'create_single_session', maxGroups });
@@ -642,19 +710,44 @@ function renderHost() {
   } else if (s.state === 'finished') {
     const sorted = [...s.teams].sort((a,b) => b.score - a.score || a.totalTime - b.totalTime);
     const winner = sorted[0];
+    const second = sorted[1];
+    const third = sorted[2];
+    const rest = sorted.slice(3);
     const totalCorrect = s.teams.reduce((sum, t) => sum + (t.correctCount || 0), 0);
     const totalPossible = s.teams.length * 5;
     const accuracy = totalPossible ? Math.round((totalCorrect / totalPossible) * 100) : 0;
     content = `
-      <section class="teacher-final-board">
-        <div class="final-crown">🏆</div>
-        <div class="final-kicker">النتيجة النهائية</div>
-        <h2>بطلات تحدي حلّها</h2>
-        <div class="final-winner premium"><div class="winner-symbol">${winner?.symbol || '★'}</div><div class="name">${winner?.name || '—'}</div><div class="score">${toArabicDigits(winner?.score || 0)} نقطة</div></div>
-        <div class="teacher-final-ranking">
-          ${sorted.map((t,i)=>`<div class="teacher-final-rank rank-${i+1}"><span class="medal">${i===0?'🥇':i===1?'🥈':i===2?'🥉':toArabicDigits(i+1)}</span><span>${t.symbol}</span><strong>${t.name}</strong><b>${toArabicDigits(t.score)} نقطة</b></div>`).join('')}
+      <section class="results-2026">
+        <div class="results-hero">
+          <div class="results-trophy">🏆</div>
+          <div class="final-kicker">النتيجة النهائية</div>
+          <h2>بطلات تحدي حلّها</h2>
+          <p>خطة حل المسألة • ابتدائية الأبناء الثانية بالبحرية</p>
         </div>
-        <div class="class-result"><strong>نتيجة الفصل</strong><span>${toArabicDigits(totalCorrect)} / ${toArabicDigits(totalPossible)} إجابة صحيحة</span><span>دقة الفصل: ${toArabicDigits(accuracy)}٪</span></div>
+
+        <div class="winner-spotlight">
+          <div class="winner-glow"></div>
+          <div class="winner-medal">🥇</div>
+          <div class="winner-label">المركز الأول</div>
+          <div class="winner-symbol">${winner?.symbol || '★'}</div>
+          <div class="winner-name">${winner?.name || '—'}</div>
+          <div class="winner-score">${toArabicDigits(winner?.score || 0)} نقطة</div>
+          <div class="winner-caption">✨ بطلات تحدي حلّها ✨</div>
+        </div>
+
+        <div class="podium-2026">
+          ${second ? `<div class="podium-card second"><div class="podium-medal">🥈</div><div class="podium-place">المركز الثاني</div><strong>${second.name}</strong><span>${toArabicDigits(second.score)} نقطة</span></div>` : ''}
+          ${winner ? `<div class="podium-card first"><div class="podium-medal">🏆</div><div class="podium-place">المركز الأول</div><strong>${winner.name}</strong><span>${toArabicDigits(winner.score)} نقطة</span></div>` : ''}
+          ${third ? `<div class="podium-card third"><div class="podium-medal">🥉</div><div class="podium-place">المركز الثالث</div><strong>${third.name}</strong><span>${toArabicDigits(third.score)} نقطة</span></div>` : ''}
+        </div>
+
+        ${rest.length ? `<div class="remaining-results"><h3>بقية المجموعات</h3>${rest.map((t,i)=>`<div class="remaining-row"><span class="remaining-rank">${toArabicDigits(i+4)}</span><span>${t.symbol || '★'}</span><strong>${t.name}</strong><b>${toArabicDigits(t.score)} نقطة</b></div>`).join('')}</div>` : ''}
+
+        <div class="class-performance-2026">
+          <div class="performance-main"><span>📊</span><div><small>أداء الفصل</small><strong>${toArabicDigits(accuracy)}٪</strong></div></div>
+          <div class="performance-stat"><small>الإجابات الصحيحة</small><strong>${toArabicDigits(totalCorrect)} / ${toArabicDigits(totalPossible)}</strong></div>
+          <div class="performance-bar"><span style="width:${accuracy}%"></span></div>
+        </div>
       </section>`;
     createConfetti();
   }
