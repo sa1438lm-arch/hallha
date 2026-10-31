@@ -16,6 +16,7 @@ let lobbySource = null;
 let audioUnlocked = false;
 let audioUnlockAttempted = false;
 let winnerSoundPlayed = false;
+let lastQuestionAudioIndex = null;
 let timerInterval = null;
 let teacherClockInterval = null;
 let currentView = 'home';
@@ -121,11 +122,32 @@ function handleMessage(msg) {
     return;
   }
   if (msg.type === 'state') {
+    const previousState = currentSession?.state;
+    const previousQuestion = currentSession?.currentQuestion;
     currentSession = msg.session;
     if (currentSession.state !== 'final_reveal') finalFinalizeSent = false;
-    if (role === 'host' && currentSession.state === 'waiting') startLobbyAudio();
-    else stopLobbyAudio();
+
+    if (role === 'host' && currentSession.state === 'waiting') {
+      stopStartAudio();
+      startLobbyAudio();
+      lastQuestionAudioIndex = null;
+    } else {
+      stopLobbyAudio();
+    }
+
+    if (role === 'host' && currentSession.state === 'question_active') {
+      const questionChanged = lastQuestionAudioIndex !== currentSession.currentQuestion;
+      const enteredQuestion = previousState !== 'question_active' || previousQuestion !== currentSession.currentQuestion;
+      if (questionChanged || enteredQuestion) {
+        lastQuestionAudioIndex = currentSession.currentQuestion;
+        restartStartAudioForQuestion();
+      }
+    } else if (role === 'host') {
+      stopStartAudio();
+    }
+
     if (role === 'host' && currentSession.state === 'finished' && !winnerSoundPlayed) {
+      stopStartAudio();
       playWinner();
       winnerSoundPlayed = true;
     }
@@ -225,10 +247,23 @@ function stopLobbyAudio() {
   try { lobbyAudio.load(); } catch {}
 }
 
-async function playStart() {
+function stopStartAudio() {
+  if (!startAudio) return;
+  try { startAudio.pause(); } catch {}
+  try { startAudio.currentTime = 0; } catch {}
+  startAudio.removeAttribute('src');
+  try { startAudio.load(); } catch {}
+}
+
+async function restartStartAudioForQuestion() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
+  stopStartAudio();
   await playFile(startAudio, 'start', { volume: 1 });
+}
+
+async function playStart() {
+  return restartStartAudioForQuestion();
 }
 
 async function playWinner() {
@@ -252,6 +287,7 @@ async function toggleSound() {
   localStorage.setItem('soundEnabled', soundEnabled);
   if (!soundEnabled) {
     stopLobbyAudio();
+    stopStartAudio();
   } else {
     await unlockTeacherAudio();
     if (currentSession?.state === 'waiting' && isHost()) {
@@ -742,9 +778,10 @@ function startFinalRevealAnimation(session) {
 }
 
 function startChallenge() {
-  send({ type: 'start_challenge' });
-  playStart();
   stopLobbyAudio();
+  stopStartAudio();
+  lastQuestionAudioIndex = null;
+  send({ type: 'start_challenge' });
 }
 function teacherSkipToNext(allAnswered) {
   if (!allAnswered) {
