@@ -12,6 +12,7 @@ let winnerAudio = null;
 let audioPrepared = false;
 let winnerSoundPlayed = false;
 let timerInterval = null;
+let teacherClockInterval = null;
 let currentView = 'home';
 let maxGroups = 5;
 let pendingTeamJoin = false;
@@ -104,6 +105,14 @@ function handleMessage(msg) {
       if (currentSession.state === 'waiting') startLobbyAudio();
     }
     render();
+    return;
+  }
+  if (msg.type === 'answered') {
+    if (currentSession?.teams && msg.teamId) {
+      const team = currentSession.teams.find(t => t.id === msg.teamId);
+      if (team) team.answered = true;
+      if (role === 'host' && currentSession.state === 'question_active') renderHost();
+    }
     return;
   }
   if (msg.type === 'state') {
@@ -218,6 +227,7 @@ function render() {
 }
 
 function renderHome() {
+  clearInterval(teacherClockInterval);
   currentView = 'home';
   role = null;
   currentSession = null;
@@ -402,6 +412,83 @@ function stateText(state) {
   return { waiting: 'بانتظار المجموعات', question_active: 'السؤال جارٍ', question_reveal: 'عرض الحل', leaderboard: 'انتقال', final_reveal: 'إعلان المراكز', finished: 'انتهت الجلسة' }[state] || state;
 }
 
+function toArabicDigits(value) {
+  return String(value).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
+}
+
+function teacherHeaderHTML() {
+  return `
+    <header class="teacher-topbar">
+      <div class="teacher-school-chip">
+        <div class="teacher-school-icon">🏫</div>
+        <div>
+          <div class="teacher-school-name">ابتدائية الأبناء الثانية بالبحرية</div>
+          <div class="teacher-school-sub">تحدي حلّها • الرياضيات</div>
+        </div>
+      </div>
+      <div class="teacher-lesson-brand">
+        <span class="teacher-subject-pill">الرياضيات</span>
+        <strong>خطة حل المسألة</strong>
+        <span class="teacher-bulb">💡</span>
+      </div>
+      <div class="teacher-meta-area">
+        <div class="teacher-name-chip">👩🏻‍🏫 <span>المعلمة: سلمى العسيري</span></div>
+        <div class="teacher-datetime-card">
+          <div id="teacher-date">—</div>
+          <div id="teacher-time">—</div>
+        </div>
+      </div>
+    </header>`;
+}
+
+function updateTeacherDateTime() {
+  const dateEl = document.getElementById('teacher-date');
+  const timeEl = document.getElementById('teacher-time');
+  if (!dateEl || !timeEl) return;
+  const now = new Date();
+  const date = new Intl.DateTimeFormat('ar-SA-u-ca-gregory-nu-arab', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  }).format(now);
+  const time = new Intl.DateTimeFormat('ar-SA-u-nu-arab', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  }).format(now);
+  dateEl.textContent = date;
+  timeEl.textContent = `🕒 ${time}`;
+}
+
+function startTeacherClock() {
+  clearInterval(teacherClockInterval);
+  updateTeacherDateTime();
+  teacherClockInterval = setInterval(updateTeacherDateTime, 1000);
+}
+
+function teamAnswerPanelHTML(s) {
+  const total = s.teams?.length || 0;
+  const answered = (s.teams || []).filter(t => t.answered).length;
+  const allAnswered = total > 0 && answered >= total;
+  const pct = total ? Math.round((answered / total) * 100) : 0;
+  return `
+    <aside class="teacher-answer-panel">
+      <div class="teacher-panel-title"><span>👥</span> متابعة إجابات المجموعات</div>
+      <div class="answer-summary-card ${allAnswered ? 'complete' : ''}">
+        <div class="answer-summary-icon">${allAnswered ? '✅' : '⏳'}</div>
+        <div class="answer-summary-label">الإجابات</div>
+        <div class="answer-summary-count">${toArabicDigits(answered)} / ${toArabicDigits(total)}</div>
+        <div class="answer-progress"><div style="width:${pct}%"></div></div>
+        <div class="answer-summary-message">${allAnswered ? 'اكتملت إجابات جميع المجموعات' : `بانتظار ${toArabicDigits(Math.max(0,total-answered))} مجموعة`}</div>
+      </div>
+      <div class="teacher-team-status-list">
+        ${(s.teams || []).map((t, i) => `
+          <div class="teacher-team-status ${t.answered ? 'answered' : ''}">
+            <span class="team-order">${toArabicDigits(i + 1)}</span>
+            <span class="team-symbol">${t.symbol || '★'}</span>
+            <span class="team-name">${t.name}</span>
+            <span class="team-state">${t.answered ? '✅ تمت الإجابة' : '⏳ بانتظار الإجابة'}</span>
+          </div>`).join('')}
+      </div>
+    </aside>`;
+}
+
 function renderHost() {
   if (!currentSession) return;
   const s = currentSession;
@@ -409,64 +496,60 @@ function renderHost() {
 
   if (s.state === 'waiting') {
     content = `
-      <h2 style="text-align:center;">كود الجلسة</h2>
-      <div class="lobby-code">${s.code}</div>
-      <div style="text-align:center; font-size:18px; margin-bottom:24px;">${s.teamCount} / ${s.maxGroups || 5} مجموعات</div>
-      <div class="teams-list">
-        ${s.teams.map(t => `
-          <div class="team-item">
-            <span class="symbol">${t.symbol}</span>
-            <span>${t.name}</span>
-            <span class="${t.connected ? 'connected' : 'waiting'}">● ${t.connected ? 'متصلة' : 'غير متصلة'}</span>
-          </div>
-        `).join('') || '<p style="text-align:center; color:#999;">في انتظار انضمام المجموعات...</p>'}
-      </div>
-      <button class="btn btn-gold" style="width:100%; margin-top:16px;" ${s.teamCount < 2 ? 'disabled' : ''} onclick="startChallenge()">ابدئي التحدي</button>
-    `;
+      <section class="teacher-lobby-card">
+        <div class="teacher-lobby-badge">جاهزون للانطلاق ✨</div>
+        <h2>رمز الجلسة</h2>
+        <div class="lobby-code">${s.code}</div>
+        <div class="teacher-lobby-count">${toArabicDigits(s.teamCount)} / ${toArabicDigits(s.maxGroups || 5)} مجموعات</div>
+        <div class="teacher-lobby-teams">
+          ${s.teams.map(t => `<div class="teacher-lobby-team"><span>${t.symbol}</span><strong>${t.name}</strong><em class="${t.connected ? 'connected' : 'waiting'}">${t.connected ? '● متصلة' : '● غير متصلة'}</em></div>`).join('') || '<p>في انتظار انضمام المجموعات...</p>'}
+        </div>
+        <button class="btn btn-gold teacher-primary-action" ${s.teamCount < 2 ? 'disabled' : ''} onclick="startChallenge()">▶ ابدئي التحدي</button>
+      </section>`;
   } else if (s.state === 'question_active') {
     const q = s.question || {};
-    const qText = q.text || 'السؤال قيد التحميل... يرجى الانتظار';
-    const qCat = q.category || '🕌';
+    const answered = (s.teams || []).filter(t => t.answered).length;
+    const allAnswered = s.teams?.length > 0 && answered === s.teams.length;
     content = `
-      <div class="question-header">
-        <div>السؤال ${q.index || (s.currentQuestion + 1)} من ٥</div>
-        <div class="timer" id="timer">${QUESTION_DURATION_SEC}</div>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
-      <div class="category">${qCat}</div>
-      <div class="question-text">${qText}</div>
-      <div class="options">
-        ${(q.options || []).map(opt => `<div class="option">${opt}</div>`).join('')}
-      </div>
-      <div class="teams-list" style="margin-top:24px;">
-        ${s.teams.map(t => `
-          <div class="team-item">
-            <span class="symbol">${t.symbol}</span>
-            <span>${t.name}</span>
-            <span>${t.answered ? '✓ ' + ((s.question && s.question.options && t.selectedOption != null) ? s.question.options[t.selectedOption] : 'أجابت') : 'بانتظار الإجابة'}</span>
+      <div class="teacher-dashboard-grid">
+        <section class="teacher-question-card">
+          <div class="teacher-question-tools">
+            <div class="teacher-question-number">📖 السؤال ${toArabicDigits(q.index || (s.currentQuestion + 1))} من ${toArabicDigits(q.total || 5)}</div>
+            <div class="teacher-category-pill">${q.category || '📘 الرياضيات'}</div>
+            <div class="teacher-timer-ring"><span id="timer">${toArabicDigits(QUESTION_DURATION_SEC)}</span><small>ثانية</small></div>
           </div>
-        `).join('')}
-      </div>
-    `;
+          <div class="teacher-time-progress"><div class="progress-fill" id="progress"></div></div>
+          <div class="teacher-question-text">${q.text || 'جاري تحميل السؤال...'}</div>
+          <div class="teacher-options-grid">
+            ${(q.options || []).map((opt, i) => `<div class="teacher-option"><span class="option-letter">${['أ','ب','ج','د'][i] || toArabicDigits(i+1)}</span><span>${opt}</span></div>`).join('')}
+          </div>
+          <div class="teacher-active-note ${allAnswered ? 'complete' : ''}">${allAnswered ? '✅ وصلت إجابات جميع المجموعات — ننتظر انتهاء زمن السؤال.' : '⏱️ يتابع النظام وصول الإجابات لحظيًا حتى انتهاء الـ٢٠ ثانية.'}</div>
+        </section>
+        ${teamAnswerPanelHTML(s)}
+      </div>`;
     startTimer(s.questionStartTime);
   } else if (s.state === 'question_reveal') {
     const r = s.reveal || {};
+    const isLast = s.currentQuestion >= 4;
     content = `
-      <h2>كشف الحل</h2>
-      <div class="category">${r.category || ''}</div>
-      <div class="question-text">${r.text || ''}</div>
-      <div class="options">
-        ${(r.options || []).map((opt, i) => `<div class="option ${i === r.correct ? 'correct' : ''}">${opt}</div>`).join('')}
+      <div class="teacher-dashboard-grid reveal-mode">
+        <section class="teacher-question-card">
+          <div class="teacher-question-tools">
+            <div class="teacher-question-number">💡 كشف الحل</div>
+            <div class="teacher-category-pill">${r.category || ''}</div>
+            <div class="teacher-solution-check">✓</div>
+          </div>
+          <div class="teacher-question-text reveal-question">${r.text || ''}</div>
+          <div class="teacher-options-grid">
+            ${(r.options || []).map((opt, i) => `<div class="teacher-option ${i === r.correct ? 'correct' : ''}"><span class="option-letter">${['أ','ب','ج','د'][i] || toArabicDigits(i+1)}</span><span>${opt}</span>${i === r.correct ? '<b class="correct-mark">✓</b>' : ''}</div>`).join('')}
+          </div>
+          <div class="teacher-solution-box"><span>💡 كشف الحل (للمعلمة فقط)</span><strong>${(r.solution || '').replace(/\n/g, '<br>')}</strong></div>
+        </section>
+        ${teamAnswerPanelHTML(s)}
       </div>
-      <div class="solution">${r.solution || ''}</div>
-      <button class="btn ${s.currentQuestion >= 4 ? 'btn-gold final-result-btn' : 'btn-primary'}" style="width:100%;" onclick="goNext()">
-        ${s.currentQuestion >= 4 ? '🏆 عرض النتيجة النهائية' : 'السؤال التالي'}
-      </button>
-    `;
+      <button class="teacher-next-btn ${isLast ? 'final' : ''}" onclick="goNext()">${isLast ? '🏆 عرض النتيجة النهائية' : 'السؤال التالي'} <span>◀</span></button>`;
   } else if (s.state === 'leaderboard') {
-    content = `
-      <h2 style="text-align:center;">جارٍ الانتقال إلى السؤال التالي…</h2>
-    `;
+    content = `<div class="teacher-transition-card"><div class="spinner-orbit">✦</div><h2>جارٍ الانتقال إلى السؤال التالي…</h2></div>`;
   } else if (s.state === 'final_reveal') {
     content = `
       <div class="final-reveal-shell">
@@ -475,8 +558,7 @@ function renderHost() {
         <p class="final-reveal-subtitle">نبدأ من المركز الثالث وصولًا إلى بطلات التحدي 🏆</p>
         <div class="reveal-stage" id="reveal-stage"></div>
         <div class="reveal-progress"><div id="reveal-progress-fill"></div></div>
-      </div>
-    `;
+      </div>`;
   } else if (s.state === 'finished') {
     const sorted = [...s.teams].sort((a,b) => b.score - a.score || a.totalTime - b.totalTime);
     const winner = sorted[0];
@@ -484,33 +566,21 @@ function renderHost() {
     const totalPossible = s.teams.length * 5;
     const accuracy = totalPossible ? Math.round((totalCorrect / totalPossible) * 100) : 0;
     content = `
-      <h2 style="text-align:center;">انتهى التحدي</h2>
-      <h2 style="text-align:center; color:#F4C542;">بطلات حل المسائل</h2>
-      <div class="final-winner">
-        <div style="font-size:48px;">${winner?.symbol || ''}</div>
-        <div class="name">${winner?.name || '—'}</div>
-        <div class="score">${winner?.score || 0} نقطة</div>
-      </div>
-      <div class="leaderboard">
-        ${sorted.map((t, i) => `
-          <div class="rank-item ${i===0?'first':''}">
-            <span class="rank">${i+1}</span>
-            <span class="symbol">${t.symbol}</span>
-            <span>${t.name}</span>
-            <span class="score">${t.score} نقطة</span>
-          </div>
-        `).join('')}
-      </div>
-      <div class="class-result">
-        <h3>نتيجة الفصل</h3>
-        <div>${totalCorrect} / ${totalPossible} إجابة صحيحة</div>
-        <div>دقة الفصل: ${accuracy}٪</div>
-      </div>
-    `;
+      <section class="teacher-final-board">
+        <div class="final-crown">🏆</div>
+        <div class="final-kicker">النتيجة النهائية</div>
+        <h2>بطلات تحدي حلّها</h2>
+        <div class="final-winner premium"><div class="winner-symbol">${winner?.symbol || '★'}</div><div class="name">${winner?.name || '—'}</div><div class="score">${toArabicDigits(winner?.score || 0)} نقطة</div></div>
+        <div class="teacher-final-ranking">
+          ${sorted.map((t,i)=>`<div class="teacher-final-rank rank-${i+1}"><span class="medal">${i===0?'🥇':i===1?'🥈':i===2?'🥉':toArabicDigits(i+1)}</span><span>${t.symbol}</span><strong>${t.name}</strong><b>${toArabicDigits(t.score)} نقطة</b></div>`).join('')}
+        </div>
+        <div class="class-result"><strong>نتيجة الفصل</strong><span>${toArabicDigits(totalCorrect)} / ${toArabicDigits(totalPossible)} إجابة صحيحة</span><span>دقة الفصل: ${toArabicDigits(accuracy)}٪</span></div>
+      </section>`;
     createConfetti();
   }
 
-  app.innerHTML = `<div class="screen"><div class="screen-inner"><button class="back-btn" onclick="renderHome()">← الرئيسية</button>${content}</div></div>`;
+  app.innerHTML = `<div class="teacher-page">${teacherHeaderHTML()}<main class="teacher-main">${content}</main></div>`;
+  startTeacherClock();
   if (s.state === 'final_reveal') startFinalRevealAnimation(s);
 }
 
@@ -697,7 +767,7 @@ function startTimer(startTime) {
     const timerEl = document.getElementById('timer');
     const progressEl = document.getElementById('progress');
     if (timerEl) {
-      timerEl.textContent = remaining;
+      timerEl.textContent = toArabicDigits(remaining);
       timerEl.classList.toggle('pulse', remaining <= 5 && remaining > 0);
     }
     if (progressEl) progressEl.style.width = `${Math.min(100, (elapsed / QUESTION_DURATION_MS) * 100)}%`;
