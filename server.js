@@ -229,8 +229,10 @@ function sendTo(ws, data) {
   }
 }
 
-function closeQuestion(session) {
+function closeQuestion(session, expectedQuestion = null, expectedStartTime = null) {
   if (session.state !== 'question_active') return;
+  if (expectedQuestion !== null && session.currentQuestion !== expectedQuestion) return;
+  if (expectedStartTime !== null && session.questionStartTime !== expectedStartTime) return;
   session.state = 'question_reveal';
   // Calculate scores for unanswered (0)
   for (const team of session.teams) {
@@ -274,7 +276,9 @@ function nextQuestion(session) {
   session.state = 'question_active';
   session.questionStartTime = Date.now();
   broadcast(session, { type: 'state', session: getPublicSession(session) });
-  setTimeout(() => closeQuestion(session), QUESTION_DURATION_MS);
+  const expectedQuestion = session.currentQuestion;
+  const expectedStartTime = session.questionStartTime;
+  setTimeout(() => closeQuestion(session, expectedQuestion, expectedStartTime), QUESTION_DURATION_MS);
 }
 
 function handleAnswer(session, teamId, optionIndex) {
@@ -453,7 +457,9 @@ wss.on('connection', (ws) => {
       session.questionStartTime = Date.now();
       session.answers.clear();
       broadcast(session, { type: 'state', session: getPublicSession(session) });
-      setTimeout(() => closeQuestion(session), QUESTION_DURATION_MS);
+      const expectedQuestion = session.currentQuestion;
+      const expectedStartTime = session.questionStartTime;
+      setTimeout(() => closeQuestion(session, expectedQuestion, expectedStartTime), QUESTION_DURATION_MS);
       return;
     }
 
@@ -461,6 +467,23 @@ wss.on('connection', (ws) => {
       const session = sessions.get(ws.sessionId);
       if (!session) return;
       handleAnswer(session, ws.teamId, msg.option);
+      return;
+    }
+
+    if (msg.type === 'force_next_question' && ws.role === 'host') {
+      const session = sessions.get(ws.sessionId);
+      if (!session || session.state !== 'question_active') return;
+
+      // سجّل المجموعات التي لم تُجب بصفر قبل الانتقال المبكر.
+      const elapsed = Math.max(0, Date.now() - (session.questionStartTime || Date.now()));
+      for (const team of session.teams) {
+        if (!session.answers.has(team.id)) {
+          session.answers.set(team.id, { option: null, time: elapsed, score: 0, correct: false });
+        }
+      }
+
+      // تنتقل المعلمة مباشرة للسؤال التالي، أو لإعلان النتائج إذا كان السؤال الأخير.
+      nextQuestion(session);
       return;
     }
 

@@ -10,6 +10,10 @@ let lobbyAudio = null;
 let startAudio = null;
 let winnerAudio = null;
 let audioPrepared = false;
+let audioContext = null;
+let audioBuffers = {};
+let lobbySource = null;
+let audioUnlocked = false;
 let winnerSoundPlayed = false;
 let timerInterval = null;
 let teacherClockInterval = null;
@@ -141,13 +145,12 @@ function isHost() { return role === 'host'; }
 function prepareTeacherAudio() {
   if (audioPrepared) return;
 
-  // Relative paths keep audio working on localhost, GitHub/Render-style subpaths,
-  // and normal domains as long as the files stay inside ./audio/.
+  // HTMLAudio fallback فقط. المحرك الأساسي بالأسفل هو Web Audio API.
   lobbyAudio = new Audio('./audio/lobby.mp3');
   startAudio = new Audio('./audio/start.mp3');
   winnerAudio = new Audio('./audio/winner.mp3');
 
-  lobbyAudio.preload = 'metadata';
+  lobbyAudio.preload = 'none';
   startAudio.preload = 'none';
   winnerAudio.preload = 'none';
   lobbyAudio.loop = true;
@@ -155,49 +158,110 @@ function prepareTeacherAudio() {
   startAudio.volume = 0.8;
   winnerAudio.volume = 0.9;
 
-  for (const audio of [lobbyAudio, startAudio, winnerAudio]) {
-    audio.addEventListener('error', () => {
-      console.warn('تعذر تحميل ملف صوت:', audio.currentSrc || audio.src);
-    });
-  }
-
   audioPrepared = true;
 }
 
-function unlockTeacherAudio() {
+async function loadAudioBuffer(name, url) {
+  if (!audioContext || audioBuffers[name]) return audioBuffers[name] || null;
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
+  const bytes = await response.arrayBuffer();
+  audioBuffers[name] = await audioContext.decodeAudioData(bytes.slice(0));
+  return audioBuffers[name];
+}
+
+async function unlockTeacherAudio() {
   if (!isHost() && currentView !== 'host-setup') return;
-  // نجهّز كائنات الصوت فقط. لا نطلب الملفات قبل الحاجة حتى نتجنب Range/416 على الاستضافة.
   prepareTeacherAudio();
+
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) throw new Error('Web Audio API غير مدعوم');
+
+    if (!audioContext) audioContext = new AudioCtx();
+    if (audioContext.state === 'suspended') await audioContext.resume();
+
+    // يتم استدعاء هذه الدالة من نقرة المعلمة، لذلك تصبح الجلسة الصوتية مصرحًا بها.
+    audioUnlocked = true;
+
+    // تحميل الملفات كـ ArrayBuffer يمنع مشاكل Range/416 التي قد تحدث مع HTMLAudio على بعض الاستضافات.
+    await Promise.allSettled([
+      loadAudioBuffer('lobby', './audio/lobby.mp3'),
+      loadAudioBuffer('start', './audio/start.mp3'),
+      loadAudioBuffer('winner', './audio/winner.mp3')
+    ]);
+  } catch (err) {
+    console.warn('تعذر تهيئة Web Audio، سيتم استخدام HTMLAudio كخيار احتياطي:', err);
+  }
+}
+
+function playBuffer(name, { loop = false, volume = 1 } = {}) {
+  if (!audioContext || !audioUnlocked || !audioBuffers[name]) return null;
+  if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+
+  const source = audioContext.createBufferSource();
+  const gain = audioContext.createGain();
+  source.buffer = audioBuffers[name];
+  source.loop = loop;
+  gain.gain.value = volume;
+  source.connect(gain);
+  gain.connect(audioContext.destination);
+  source.start(0);
+  return source;
 }
 
 function startLobbyAudio() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
-  if (!lobbyAudio) return;
-  lobbyAudio.loop = true;
-  lobbyAudio.volume = 0.18;
-  lobbyAudio.play().catch((err) => console.warn('تعذر تشغيل lobby.mp3:', err));
-}
-function stopLobbyAudio() {
+
+  if (lobbySource) return;
+  const source = playBuffer('lobby', { loop: true, volume: 0.18 });
+  if (source) {
+    lobbySource = source;
+    source.onended = () => { if (lobbySource === source) lobbySource = null; };
+    return;
+  }
+
+  // fallback إذا لم يكتمل تحميل Web Audio بعد.
   if (lobbyAudio) {
-    lobbyAudio.pause();
     lobbyAudio.currentTime = 0;
+    lobbyAudio.play().catch((err) => console.warn('تعذر تشغيل lobby.mp3:', err));
   }
 }
+
+function stopLobbyAudio() {
+  if (lobbySource) {
+    try { lobbySource.stop(); } catch {}
+    lobbySource = null;
+  }
+  if (lobbyAudio) {
+    lobbyAudio.pause();
+    try { lobbyAudio.currentTime = 0; } catch {}
+  }
+}
+
 function playStart() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
-  if (!startAudio) return;
-  startAudio.currentTime = 0;
-  startAudio.play().catch((err) => console.warn('تعذر تشغيل start.mp3:', err));
+  const source = playBuffer('start', { volume: 0.8 });
+  if (source) return;
+  if (startAudio) {
+    startAudio.currentTime = 0;
+    startAudio.play().catch((err) => console.warn('تعذر تشغيل start.mp3:', err));
+  }
 }
+
 function playWinner() {
   if (!isHost() || !soundEnabled) return;
   prepareTeacherAudio();
-  if (!winnerAudio) return;
-  winnerAudio.currentTime = 0;
-  winnerAudio.play().catch((err) => console.warn('تعذر تشغيل winner.mp3:', err));
+  const source = playBuffer('winner', { volume: 0.9 });
+  if (source) return;
+  if (winnerAudio) {
+    winnerAudio.currentTime = 0;
+    winnerAudio.play().catch((err) => console.warn('تعذر تشغيل winner.mp3:', err));
+  }
 }
+
 function toggleSound() {
   soundEnabled = !soundEnabled;
   localStorage.setItem('soundEnabled', soundEnabled);
@@ -246,7 +310,7 @@ function renderHome() {
           <div class="hero-kicker">تحدي تعليمي تفاعلي</div>
           <h1>حلّها</h1>
           <p>تحدي حل المسائل بطريقة ممتعة وتعاونية</p>
-          <div class="hero-meta"><span>٥ أسئلة</span><span>٢٠ ثانية لكل سؤال</span><span>Realtime</span></div>
+          <div class="hero-meta"><span>٥ أسئلة</span><span>٢٠ ثانية لكل سؤال</span><span>تحدٍ تفاعلي</span></div>
         </section>
         <section class="role-cards">
           <button class="role-card teacher-role" onclick="startAsTeacher()">
@@ -298,12 +362,14 @@ function changeMax(d) {
   if (el) el.textContent = maxGroups;
 }
 
-function createAndOpen() {
-  unlockTeacherAudio();
+async function createAndOpen() {
+  await unlockTeacherAudio();
   connectWS();
-  setTimeout(() => {
-    send({ type: 'create_single_session', maxGroups });
-  }, 300);
+  const trySend = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) send({ type: 'create_single_session', maxGroups });
+    else setTimeout(trySend, 80);
+  };
+  trySend();
 }
 
 function showJoin() {
@@ -441,7 +507,8 @@ function teacherHeaderHTML() {
       <div class="teacher-meta-area">
         <div class="teacher-name-chip">👩🏻‍🏫 <span>المعلمة: سلمى العسيري</span></div>
         <div class="teacher-datetime-card">
-          <div id="teacher-date">—</div>
+          <div id="teacher-hijri-date" class="teacher-hijri-date">—</div>
+          <div id="teacher-date" class="teacher-gregorian-date">—</div>
           <div id="teacher-time">—</div>
         </div>
       </div>
@@ -449,17 +516,22 @@ function teacherHeaderHTML() {
 }
 
 function updateTeacherDateTime() {
+  const hijriEl = document.getElementById('teacher-hijri-date');
   const dateEl = document.getElementById('teacher-date');
   const timeEl = document.getElementById('teacher-time');
   if (!dateEl || !timeEl) return;
   const now = new Date();
+  const hijri = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-arab', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  }).format(now);
   const date = new Intl.DateTimeFormat('ar-SA-u-ca-gregory-nu-arab', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   }).format(now);
   const time = new Intl.DateTimeFormat('ar-SA-u-nu-arab', {
     hour: '2-digit', minute: '2-digit', second: '2-digit'
   }).format(now);
-  dateEl.textContent = date;
+  if (hijriEl) hijriEl.textContent = `هـ ${hijri}`;
+  dateEl.textContent = `م ${date}`;
   timeEl.textContent = `🕒 ${time}`;
 }
 
@@ -530,7 +602,8 @@ function renderHost() {
           <div class="teacher-options-grid">
             ${(q.options || []).map((opt, i) => `<div class="teacher-option"><span class="option-letter">${['أ','ب','ج','د'][i] || toArabicDigits(i+1)}</span><span>${opt}</span></div>`).join('')}
           </div>
-          <div class="teacher-active-note ${allAnswered ? 'complete' : ''}">${allAnswered ? '✅ وصلت إجابات جميع المجموعات — ننتظر انتهاء زمن السؤال.' : '⏱️ يتابع النظام وصول الإجابات لحظيًا حتى انتهاء الـ٢٠ ثانية.'}</div>
+          <div class="teacher-active-note ${allAnswered ? 'complete' : ''}">${allAnswered ? '✅ وصلت إجابات جميع المجموعات — يمكنكِ الانتقال الآن أو انتظار انتهاء الوقت.' : '⏱️ يمكنكِ الانتقال للسؤال التالي في أي وقت، حتى قبل انتهاء الـ٢٠ ثانية.'}</div>
+          <button class="teacher-next-btn early-next" onclick="teacherSkipToNext(${allAnswered})">${s.currentQuestion >= 4 ? '🏆 إنهاء السؤال وعرض النتيجة' : 'السؤال التالي'} <span>◀</span></button>
         </section>
         ${teamAnswerPanelHTML(s)}
       </div>`;
@@ -650,6 +723,15 @@ function startChallenge() {
   playStart();
   stopLobbyAudio();
 }
+function teacherSkipToNext(allAnswered) {
+  if (!allAnswered) {
+    const remaining = (currentSession?.teams || []).filter(t => !t.answered).length;
+    const ok = window.confirm(`ما زالت ${toArabicDigits(remaining)} مجموعة لم تُجب. هل تريدين الانتقال الآن؟`);
+    if (!ok) return;
+  }
+  send({ type: 'force_next_question' });
+}
+
 function goNext() { send({ type: 'next_question' }); }
 
 function studentGameHeaderHTML(s) {
@@ -683,7 +765,7 @@ function renderTeam() {
         <h2>في انتظار بدء التحدي</h2>
         <p>استعدوا يا <strong>${me?.name || 'بطلات'}</strong>، ستظهر الأسئلة هنا فور أن تبدأ المعلمة.</p>
         <div class="student-session-code"><span>رمز الجلسة</span><strong>${s.code}</strong></div>
-        <div class="student-connected-badge">● متصلة لحظيًا بالتحدي</div>
+        <div class="student-connected-badge">● متصلة بالتحدي</div>
         <div class="student-mini-teams">
           ${(s.teams || []).map(t => `<span class="${t.id===teamId?'mine':''}">${t.symbol} ${t.name}</span>`).join('')}
         </div>

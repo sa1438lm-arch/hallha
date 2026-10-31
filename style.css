@@ -241,7 +241,7 @@ body {
 .class-result { margin-top: 28px; text-align: center; background: #F8F7FC; padding: 20px; border-radius: 16px; }
 
 .sound-toggle {
-  position: fixed; top: 18px; left: 18px; z-index: 100;
+  position: fixed; bottom: 18px; left: 18px; z-index: 100;
   background: rgba(10, 10, 42, 0.85); color: white; border: none;
   border-radius: 14px; padding: 12px 16px; font-size: 15px; cursor: pointer;
   backdrop-filter: blur(10px);
@@ -442,7 +442,7 @@ label {
   .join-step-line { display: none; }
   .join-card { padding: 18px; border-radius: 18px; }
   .join-actions { grid-template-columns: 1fr; }
-  .sound-toggle { left: 12px; top: 12px; padding: 10px 12px; }
+  .sound-toggle { left: 12px; bottom: 12px; top:auto; padding: 10px 12px; }
 }
 
 @media (max-width: 480px) {
@@ -1616,3 +1616,12 @@ body {
   .student-final-stats { grid-template-columns:1fr; }
 }
 .student-answer-status.answered { background:#eafbf4; color:#08714b; border:1px solid #a9e7cf; }
+
+
+/* Final requested controls */
+.sound-toggle { top:auto !important; bottom:18px !important; left:18px !important; }
+.teacher-hijri-date { font-weight:900; color:#4f3f86; margin-bottom:3px; }
+.teacher-gregorian-date { color:#6f6588; font-size:13px; margin-bottom:3px; }
+.teacher-datetime-card { display:flex; flex-direction:column; gap:2px; }
+.teacher-next-btn.early-next { margin-top:18px; width:100%; }
+@media (max-width:700px){ .sound-toggle { bottom:12px !important; left:12px !important; } }
